@@ -1,83 +1,117 @@
 <div align="center">
 
-<img src="app/logo.png" width="96" alt="DiskMate logo">
+<img src="app/logo.png" width="88" alt="DiskMate">
 
 # DiskMate 磁盘管家
 
-**开源的 Windows 磁盘空间管理工具箱 —— 应用搬家 · 垃圾清理 · 空间分析**
+**开源的 Windows 电脑管家 · 驾驶舱玻璃拟态界面**
 
-基于 Electron · 无边框现代 UI · 深色/浅色双主题 · 单目录绿色便携
+应用搬家 · 垃圾清理 · 空间分析 · 系统优化 · 硬件监测 —— 21 大功能模块
+
+![platform](https://img.shields.io/badge/platform-Windows%2010%2F11%20x64-0ea5e9)
+![electron](https://img.shields.io/badge/Electron-33-47848F)
+![license](https://img.shields.io/badge/license-MIT-10b981)
 
 </div>
 
 ---
 
-## ✨ 功能一览
+## ✨ 功能总览
 
-| 模块 | 说明 |
-|------|------|
-| 🏠 **首页体检** | 磁盘/内存概况、CPU·内存实时监控、一键体检评分与问题直达 |
-| 📦 **应用搬家** | 把 C 盘软件整体迁到其他磁盘，原位置创建目录联接（Junction），软件无感知、可一键还原；集成卸载 |
-| 🧹 **垃圾清理** | 临时文件、Windows 更新缓存、回收站、缩略图、浏览器缓存、崩溃转储、着色器缓存、开发工具缓存等 10 类 |
-| 📊 **空间分析** | WizTree 风格 squarified 矩形树图 + 目录树双视图，单击钻取、右键返回、悬停详情 |
-| 📄 **大文件查找** | 按阈值全盘扫描，自动排除系统目录，删除走回收站 |
-| 🔁 **重复文件** | 大小 + 内容哈希双重比对，智能勾选，每组强制保留一份 |
-| ⚡ **系统加速** | 进程内存排行、一键释放闲置内存（EmptyWorkingSet）、结束进程（关键进程防呆） |
-| 🛡️ **隐私清理** | 最近文档、运行历史、地址栏历史、剪贴板、Chrome/Edge 浏览历史 |
-| 🔄 **软件更新** | 基于 winget 检测已装软件更新，一键静默升级 |
-| 🚀 **启动项管理** | 注册表 Run 键 + 启动文件夹 + 计划任务三类来源，禁用自动备份可恢复 |
-| 💬 **微信/QQ 专清** | 自动定位微信（含 4.0 xwechat_files）/QQ 数据目录，区分缓存与聊天文件防误删 |
-| 🧰 **工具箱** | SFC 修复、DISM 组件瘦身、DNS 刷新、网络重置、图标缓存重建、文件粉碎等 12 项 |
+<table>
+<tr><td width="33%">
+
+**🧹 清理**
+- 垃圾清理（10 类）
+- 深度清理（空文件夹 / 失效快捷方式）
+- 隐私清理（痕迹 / 浏览记录）
+- 注册表清理（失效项，带备份）
+- 微信 / QQ 专项清理
+
+</td><td width="33%">
+
+**📊 空间**
+- 空间分析（矩形树图 + 目录树）
+- 大文件查找
+- 重复文件（哈希 + 逐字节校验）
+- 应用搬家（目录联接，可还原）
+
+</td><td width="33%">
+
+**⚡ 优化 / 系统**
+- 系统加速（内存释放 / 进程）
+- 一键优化（可逆调优）
+- 启动项管理（含计划任务）
+- 右键菜单管理
+- 驱动管理 / 硬件信息
+- 磁盘健康（SMART）/ 网络工具
+- 软件更新（winget）/ 工具箱
+
+</td></tr>
+</table>
+
+## 🎨 界面特性
+
+- **驾驶舱玻璃拟态**：浅色渐变 / 深色双主题，悬浮胶囊侧边栏，磨砂玻璃卡片
+- **自定义背景**：图片 / 视频背景，亮暗分设，模糊 + 遮罩，每 30 秒可自动切换壁纸
+- **丰富动效**：极光背景、评分环炫光、卡片入场、按钮涟漪、数字滚动等
+- **应用内自动更新**：检测新版 → 下载安装包 → 一键安装
 
 ## 🚀 快速开始
 
-### 方式一：从源码构建（推荐）
+### 方式一：直接安装（推荐）
 
-> 要求：Windows 10/11 x64，可联网
+前往 [Releases](https://github.com/945967063/DiskMate/releases) 下载 `DiskMate-Setup-vX.X.exe`，双击安装（简体中文向导，装完自动运行）。
+
+> 程序需要管理员权限，启动时自动请求 UAC。首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。
+
+### 方式二：从源码构建
 
 ```bat
-git clone https://github.com/<你的用户名>/DiskMate.git
+git clone https://github.com/945967063/DiskMate.git
 cd DiskMate
 build.bat
 ```
 
-`build.bat` 会自动从 npmmirror/GitHub 下载 Electron 运行时（约 110MB）并组装出 `DiskMate\DiskMate.exe`，同时创建桌面快捷方式。
+`build.bat` 会自动下载 Electron 运行时并组装出 `DiskMate\DiskMate.exe`。
 
-### 方式二：便携使用
+### 方式三：开发调试
 
-构建产物 `DiskMate\` 是完全绿色便携的——整个文件夹拷到任何 Windows x64 电脑直接运行 `DiskMate.exe`，无需安装。
-
-> 程序需要管理员权限（搬家/清理系统目录），启动时会自动请求 UAC 提权。
-> 首次运行如遇 SmartScreen 提示，点「更多信息 → 仍要运行」。
+`app\` 目录即 Electron 的 `resources\app`，修改其中任意文件后重启程序（或按 **Ctrl+R** 刷新）即可生效，无需编译。按 **F12** 打开开发者工具实时调试界面。
 
 ## 🏗️ 项目结构
 
 ```
 DiskMate/
-├── app/                  # 应用源码（即 Electron 的 resources/app）
-│   ├── main.js           # 主进程：窗口、UAC 提权、系统对话框
-│   ├── renderer.js       # 13 个功能模块的全部逻辑
-│   ├── index.html        # 界面结构
-│   ├── style.css         # 设计系统（CSS 变量双主题）
-│   ├── util.js           # PowerShell 调用、目录遍历、回收站删除等
-│   ├── ui.js             # Toast / Modal / 主题 / 自绘标题栏
+├── app/                 # 应用源码（= Electron resources/app）
+│   ├── main.js          # 主进程：窗口 / UAC 提权 / IPC / 自动更新
+│   ├── renderer.js      # 全部 21 个功能模块逻辑
+│   ├── index.html       # 界面结构
+│   ├── style.css        # 设计系统（CSS 变量双主题）
+│   ├── effects.css      # 视觉特效层（玻璃 / 动效 / 背景）
+│   ├── util.js          # PowerShell 调用 / 文件遍历 / 回收站
+│   ├── ui.js            # Toast / Modal / 主题 / 导航
 │   └── package.json
-├── build.bat / build.ps1 # 一键构建脚本
+├── build.bat / build.ps1  # 一键构建脚本
+├── 一键推送.bat            # 本地 git push helper
+├── CHANGELOG.md
 └── README.md
 ```
 
+> 安装包通过 GitHub Releases 分发，不纳入 git 仓库（避免历史膨胀）。
+
 ## 🔧 技术要点
 
-- **应用搬家**：`rename` 探测目录占用 → `robocopy` 复制 → `mklink /J` 目录联接 → 失败自动回滚；记录存于 `%ProgramData%\DiskMate\moves.json`
-- **系统交互**：注册表/计划任务/回收站等通过 PowerShell `-EncodedCommand` 调用（UTF-8 安全），文件操作用 Node.js 原生 API
-- **矩形树图**：Canvas 实现 squarified treemap 算法，两层嵌套渲染
-- **内存释放**：PowerShell `Add-Type` 调用 `psapi.dll!EmptyWorkingSet`
-- 开发即运行：修改 `app/` 下任意文件，重启程序即生效，无需编译
+- **应用搬家**：`robocopy` 复制 → `mklink /J` 目录联接 → 失败自动回滚；记录存于 `%ProgramData%\DiskMate`
+- **系统交互**：注册表 / 计划任务 / 回收站 / SMART 等经 PowerShell `-EncodedCommand`（UTF-8 安全）调用
+- **矩形树图**：Canvas 实现 squarified treemap
+- **玻璃拟态**：`backdrop-filter` 磨砂 + 自定义背景层
+- **自动更新**：读取 GitHub Releases API，应用内 `fetch` 下载安装包并运行
 
 ## ⚠️ 免责声明
 
-本工具会对系统文件与注册表进行修改（均有确认提示与备份/回滚机制），请在了解相应功能作用的前提下使用。清理与删除操作有不可逆风险，作者不对数据损失负责。
+本工具会修改系统文件与注册表（均有确认提示与备份 / 回滚），清理删除操作有不可逆风险，请在了解功能作用的前提下使用，作者不对数据损失负责。
 
 ## 📄 License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © lihaha

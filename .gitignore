@@ -2,6 +2,15 @@
 DiskMate/
 electron-*.zip
 *.zip
+stage/
+
+# 安装包（通过 GitHub Releases 分发，不纳入 git 历史）
+releases/
+*.exe
+
+# 临时 / 分卷 / 待删
+_parts/
+_to_delete/
 
 # 系统与编辑器
 Thumbs.db
