@@ -1,0 +1,13 @@
+# 构建产物
+DiskMate/
+electron-*.zip
+*.zip
+
+# 系统与编辑器
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+
+# Node
+node_modules/
