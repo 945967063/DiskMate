@@ -1,7 +1,7 @@
 {
   "name": "diskmate",
   "productName": "DiskMate 磁盘管家",
-  "version": "2.1.0",
+  "version": "2.4.0",
   "description": "应用搬家 · 垃圾清理 · 空间分析 · 启动项管理 · 微信/QQ专清",
   "main": "main.js"
 }

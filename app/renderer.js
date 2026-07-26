@@ -304,6 +304,11 @@ async function mvRestore() {
     ui.busy(true, '② 正在复制文件回原位置…');
     const r = await execCmd(`robocopy "${rec.target}" "${rec.source}" /E /COPY:DAT /DCOPY:DAT /R:1 /W:1 /XJ /NFL /NDL /NP`);
     if (r.code >= 8) {
+      // 先清掉 robocopy 的部分残留，否则 mklink /J 会因目录已存在而失败
+      if (fs.existsSync(rec.source) && !isJunction(rec.source)) {
+        const res0 = { freed: 0, failed: 0 };
+        await deleteDirectory(rec.source, res0);
+      }
       await execCmd(`mklink /J "${rec.source}" "${rec.target}"`);
       throw new Error('复制失败，已恢复联接，软件仍可正常使用。');
     }
@@ -478,7 +483,7 @@ async function jkClean() {
   $('#jk-total').textContent = '';
   $('#jk-status').textContent = `清理完成，共释放 ${fmt(res.freed)}` + (res.failed ? `（${res.failed} 个被占用文件已跳过）` : '');
   ui.toast(`🎉 清理完成！释放空间 <b>${fmt(res.freed)}</b>` + (res.failed ? `<br><span class="dim">${res.failed} 个文件被占用已跳过</span>` : ''), 'success', 5000);
-  $('#jk-scan').disabled = false; jk.busy = false;
+  $('#jk-scan').disabled = false; $('#jk-clean').disabled = false; jk.busy = false;
 }
 
 jkBuildCats(); jkRender();
@@ -824,11 +829,11 @@ async function bfDelete() {
   ui.busy(true, '正在移入回收站…');
   const { ok, fail } = await recycleFiles(picked.map(f => f.p));
   ui.busy(false);
-  bf.items = bf.items.filter(f => !f.checked || !ok);
-  // 重新过滤：已删除成功的从列表移除（简单处理：全部重扫状态）
+  // 仅移除磁盘上确实已不存在的文件（删除失败的会保留在列表中）
+  const freed = bf.items.filter(f => f.checked && !fs.existsSync(f.p)).reduce((s, f) => s + f.size, 0);
   bf.items = bf.items.filter(f => fs.existsSync(f.p));
   bfRender();
-  ui.toast(`已移入回收站 ${ok} 个文件，释放约 ${fmt(total)}` + (fail ? `（${fail} 个失败）` : ''), fail ? 'warn' : 'success', 5000);
+  ui.toast(`已移入回收站 ${ok} 个文件，释放约 ${fmt(freed)}` + (fail ? `（${fail} 个失败，可能被占用）` : ''), fail ? 'warn' : 'success', 5000);
 }
 
 $('#bf-browse').addEventListener('click', async () => {
@@ -954,14 +959,29 @@ async function dpDelete() {
     if (g.files.length && g.files.every(f => f.checked))
       return ui.toast('有分组的全部文件都被勾选了——每组至少要保留一个', 'error', 5000);
   const total = picked.reduce((s, x) => s + x.g.size, 0);
-  if (!await ui.confirm('删除重复文件', `将把 <b>${picked.length}</b> 个重复文件（共 <b>${fmt(total)}</b>）移入回收站，每组保留未勾选的文件。`, { okText: '删除', danger: true })) return;
+  if (!await ui.confirm('删除重复文件', `将把 <b>${picked.length}</b> 个重复文件（共 <b>${fmt(total)}</b>）移入回收站，每组保留未勾选的文件。<br><span class="dim">删除前会对每个文件与保留文件做逐字节校验，确保内容完全一致。</span>`, { okText: '删除', danger: true })) return;
+  ui.busy(true, '正在逐字节校验内容…');
+  // 采样哈希可能碰撞，删除前对每个待删文件与本组“保留文件”做真实逐字节比对
+  const safe = [], skipped = [];
+  for (const x of picked) {
+    const keeper = x.g.files.find(f => !f.checked);
+    if (keeper && await filesEqual(keeper.p, x.f.p)) safe.push(x);
+    else skipped.push(x);
+  }
+  if (!safe.length) {
+    ui.busy(false);
+    return ui.toast('校验后未发现内容完全一致的可删文件（已避免误删）', 'warn', 5000);
+  }
   ui.busy(true, '正在移入回收站…');
-  const { ok, fail } = await recycleFiles(picked.map(x => x.f.p));
+  const { ok, fail } = await recycleFiles(safe.map(x => x.f.p));
   ui.busy(false);
-  for (const g of dp.groups) g.files = g.files.filter(f => !f.checked || fs.existsSync(f.p));
+  for (const g of dp.groups) g.files = g.files.filter(f => fs.existsSync(f.p));
   dp.groups = dp.groups.filter(g => g.files.length > 1);
   dpRender();
-  ui.toast(`已删除 ${ok} 个重复文件，释放约 ${fmt(total)}` + (fail ? `（${fail} 个失败）` : ''), fail ? 'warn' : 'success', 5000);
+  const freed = safe.reduce((s, x) => s + x.g.size, 0);
+  ui.toast(`已删除 ${ok} 个重复文件，释放约 ${fmt(freed)}` +
+    (skipped.length ? `<br><span class="dim">${skipped.length} 个经校验内容不一致，已跳过</span>` : '') +
+    (fail ? `（${fail} 个失败）` : ''), (fail || skipped.length) ? 'warn' : 'success', 5500);
 }
 
 $('#dp-browse').addEventListener('click', async () => {
@@ -1481,23 +1501,31 @@ async function upScan() {
     $('#up-status').textContent = '未找到 winget（Windows 应用安装程序）。可在 Microsoft Store 安装「应用安装程序」后重试。';
     return;
   }
-  const lines = r.out.split(/\r?\n/);
-  const headIdx = lines.findIndex(l => /^(名称|Name)\s{2,}/.test(l.trim()));
+  // 去掉进度条回车残留（\r 之后为最终内容）
+  const lines = r.out.split(/\r?\n/).map(l => l.includes('\r') ? l.split('\r').pop() : l);
+  const headIdx = lines.findIndex(l => /^(名称|Name)\s+(ID)\s+/.test(l));
   if (headIdx < 0) {
-    $('#up-status').textContent = /升级|upgrades|No installed package/i.test(r.out)
+    $('#up-status').textContent = /No installed package|没有可用的升级|无可用升级|as no available upgrade/i.test(r.out)
       ? '所有软件均为最新版本 🎉' : '未能解析 winget 输出。';
     return;
   }
+  // 按表头各列的字符起始位置切固定宽度列（比按空白 split 更稳）
+  const head = lines[headIdx];
+  const colAt = re => { const m = head.match(re); return m ? m.index : -1; };
+  const cId = colAt(/\bID\b/), cVer = colAt(/(版本|Version)/),
+        cAvail = colAt(/(可用|Available)/), cSrc = colAt(/(源|Source)/);
   const rows = [];
-  for (let i = headIdx + 2; i < lines.length; i++) {
-    const l = lines[i].trim();
-    if (!l || /^\d+\s|^-{3,}/.test(l) === false && /升级|upgrade|available/i.test(l) && l.split(/\s{2,}/).length < 3) continue;
-    const parts = l.split(/\s{2,}/).filter(Boolean);
-    if (parts.length >= 4) {
-      const src = parts[parts.length - 1];
-      if (!/winget|msstore/i.test(src)) continue;
-      rows.push({ name: parts[0], id: parts[1], cur: parts[2], next: parts[3] });
-    }
+  const slice = (l, a, b) => (a < 0 ? '' : (b < 0 ? l.slice(a) : l.slice(a, b))).trim();
+  for (let i = headIdx + 1; i < lines.length; i++) {
+    const l = lines[i];
+    if (!l.trim() || /^-{3,}$/.test(l.trim()) || /^\d+\s+(升级|upgrades?|package)/i.test(l.trim())) continue;
+    if (l.length < cAvail) continue;
+    const name = slice(l, 0, cId), id = slice(l, cId, cVer),
+          cur = slice(l, cVer, cAvail), next = slice(l, cAvail, cSrc),
+          src = slice(l, cSrc, -1);
+    if (!id || !next) continue;
+    if (cSrc >= 0 && src && !/winget|msstore/i.test(src)) continue;
+    rows.push({ name: name || id, id, cur, next });
   }
   up.rows = rows;
   $('#up-table tbody').innerHTML = rows.map((x, i) => `
@@ -1569,6 +1597,28 @@ const TOOLS = [
       ui.busy(false);
       ui.toast(`已粉碎 ${ok} 个文件` + (fail ? `（${fail} 个失败，可能被占用）` : ''), fail ? 'warn' : 'success', 5000);
     } },
+  { ico: '⏱️', name: '创建系统还原点', desc: '为当前系统状态创建还原点，出问题时可回退',
+    run: async () => {
+      if (!await ui.confirm('创建系统还原点', '将为当前系统创建一个还原点（需要系统保护已开启，可能耗时 1-2 分钟）。')) return;
+      ui.busy(true, '正在创建还原点…');
+      const r = await psRun(`Enable-ComputerRestore -Drive '${psq(SYS_DRIVE)}' -ErrorAction SilentlyContinue; Checkpoint-Computer -Description 'DiskMate 手动还原点' -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop; Write-Output OK`);
+      ui.busy(false);
+      ui.toast(/OK/.test(r.stdout || '') ? '✅ 系统还原点已创建' : '创建失败：' + esc((r.stderr || r.out).trim().slice(0, 150)), /OK/.test(r.stdout || '') ? 'success' : 'error', 5000);
+    } },
+  { ico: '🔙', name: '打开系统还原', desc: '打开 Windows 系统还原向导（回退到还原点）', run: () => execCmd('start rstrui') },
+  { ico: '📝', name: 'Hosts 编辑器', desc: '用记事本以管理员权限编辑 hosts 文件（域名映射）',
+    run: () => execCmd(`start notepad "${WIN_DIR}\\System32\\drivers\\etc\\hosts"`) },
+  { ico: '🔋', name: '电池健康报告', desc: '生成笔记本电池损耗报告（HTML，自动打开）',
+    run: async () => {
+      ui.busy(true, '正在生成电池报告…');
+      const out = path.join(DM_DIR, 'battery-report.html');
+      fs.mkdirSync(DM_DIR, { recursive: true });
+      const r = await execCmd(`powercfg /batteryreport /output "${out}"`);
+      ui.busy(false);
+      if (fs.existsSync(out)) { ipcRenderer.invoke('open-path', out); ui.toast('电池报告已生成', 'success'); }
+      else ui.toast('生成失败（台式机可能无电池）', 'warn', 4000);
+    } },
+  { ico: '🧩', name: '磁盘优化/碎片整理', desc: '打开 Windows 磁盘优化工具（SSD 执行 TRIM）', run: () => execCmd('start dfrgui') },
   { ico: '🧮', name: '磁盘清理(系统)', desc: '打开 Windows 自带磁盘清理工具', run: () => execCmd('start cleanmgr') },
   { ico: '📋', name: '任务管理器', desc: '查看进程 / 性能 / 启动详情', run: () => execCmd('start taskmgr') },
   { ico: '🔧', name: '设备管理器', desc: '查看和管理硬件设备驱动', run: () => execCmd('start devmgmt.msc') },
@@ -1593,4 +1643,702 @@ $('#tool-grid').querySelectorAll('.tool-card').forEach(card =>
 /* v2.1 懒加载 */
 window.addEventListener('page-show', e => {
   if (e.detail === 'boost' && !boLoaded) { boLoaded = true; boLoad(); }
+});
+
+/* ============================================================
+ * v2.2 —— 驱动管理
+ * ============================================================ */
+const dv = { list: [], busy: false };
+
+async function dvScan() {
+  if (dv.busy) return;
+  dv.busy = true; $('#dv-scan').disabled = true;
+  $('#dv-status').textContent = '正在读取驱动列表…';
+  // 已签名驱动 + 有问题的 PnP 设备（ConfigManagerErrorCode != 0）
+  const r = await psRun(`
+$bad=@{};
+Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue | Where-Object {$_.ConfigManagerErrorCode -ne 0} | ForEach-Object { if($_.PNPDeviceID){$bad[$_.PNPDeviceID]=$_.ConfigManagerErrorCode} };
+$d=Get-CimInstance Win32_PnPSignedDriver -ErrorAction SilentlyContinue | Where-Object {$_.DeviceName} | Select-Object DeviceName,DriverVersion,DriverDate,Manufacturer,DeviceClass,DeviceID;
+$d | ForEach-Object { $_ | Add-Member -NotePropertyName Err -NotePropertyValue ([int]($bad[$_.DeviceID])) -PassThru } | ConvertTo-Json -Compress -Depth 2`);
+  dv.busy = false; $('#dv-scan').disabled = false;
+  const rows = parseJsonArray(r.stdout || r.out);
+  dv.list = rows.map(x => ({
+    name: x.DeviceName || '', ver: x.DriverVersion || '', mfr: x.Manufacturer || '',
+    cls: x.DeviceClass || '', err: x.Err || 0,
+    date: (String(x.DriverDate || '').match(/^\d{8}|\/Date\((\d+)\)/) ? dvFmtDate(x.DriverDate) : ''),
+  }));
+  dvRender();
+  const bad = dv.list.filter(d => d.err).length;
+  $('#dv-total').textContent = `共 ${dv.list.length} 个驱动` + (bad ? ` · ${bad} 个异常` : '');
+  $('#dv-status').textContent = bad ? `发现 ${bad} 个异常设备（黄色叹号），建议更新或重装其驱动。` : '所有设备驱动工作正常。';
+}
+
+function dvFmtDate(v) {
+  const s = String(v);
+  let m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  m = s.match(/\/Date\((\d+)\)/);
+  if (m) { const d = new Date(+m[1]); return isFinite(d) ? d.toISOString().slice(0, 10) : ''; }
+  return '';
+}
+
+function dvRender() {
+  const kw = $('#dv-filter').value.trim().toLowerCase();
+  const onlyBad = $('#dv-onlybad').checked;
+  const arr = dv.list.filter(d =>
+    (!onlyBad || d.err) &&
+    (!kw || d.name.toLowerCase().includes(kw) || d.mfr.toLowerCase().includes(kw)));
+  $('#dv-table tbody').innerHTML = arr.map(d => `
+    <tr>
+      <td>${d.err ? '<span class="tag red">异常</span>' : '<span class="tag green">正常</span>'}</td>
+      <td title="${esc(d.name)}">${esc(d.name)}</td>
+      <td class="dim" title="${esc(d.mfr)}">${esc(d.mfr)}</td>
+      <td class="dim">${esc(d.ver)}</td>
+      <td class="dim">${esc(d.date)}</td>
+      <td class="dim">${esc(d.cls)}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px" class="dim">无匹配结果</td></tr>';
+}
+
+async function dvBackup() {
+  const dir = await ipcRenderer.invoke('pick-folder', '选择驱动备份目录（建议空文件夹）');
+  if (!dir) return;
+  const target = path.join(dir, 'DriverBackup_' + new Date().toISOString().slice(0, 10).replace(/-/g, ''));
+  if (!await ui.confirm('备份全部驱动', `将把本机所有第三方驱动导出到：<br><b>${esc(target)}</b><br><br>该过程可能需要几分钟。`, { okText: '开始备份' })) return;
+  ui.busy(true, '正在导出驱动（可能需要几分钟）…');
+  fs.mkdirSync(target, { recursive: true });
+  // 优先 DISM（含 inf 依赖），失败回退 pnputil
+  let r = await psRun(`Export-WindowsDriver -Online -Destination '${psq(target)}' -ErrorAction SilentlyContinue | Out-Null; Write-Output DONE`);
+  if (!/DONE/.test(r.stdout || '')) r = await execCmd(`pnputil /export-driver * "${target}"`);
+  ui.busy(false);
+  let count = 0;
+  try { count = fs.readdirSync(target).length; } catch { }
+  if (count > 0) {
+    ui.toast(`✅ 驱动已备份到 ${count} 个文件夹`, 'success', 5000);
+    ipcRenderer.invoke('open-path', target);
+  } else {
+    ui.toast('备份未生成文件，请确认以管理员身份运行', 'error', 5000);
+  }
+}
+
+$('#dv-scan').addEventListener('click', dvScan);
+$('#dv-filter').addEventListener('input', () => dv.list.length && dvRender());
+$('#dv-onlybad').addEventListener('change', () => dv.list.length && dvRender());
+$('#dv-backup').addEventListener('click', dvBackup);
+let dvLoaded = false;
+
+/* ============================================================
+ * v2.2 —— 硬件信息
+ * ============================================================ */
+const hw = { text: '' };
+
+async function hwScan() {
+  $('#hw-status').textContent = '正在读取硬件信息…';
+  $('#hw-grid').innerHTML = '<span class="dim">读取中…</span>';
+  const r = await psRun(`
+$o=[ordered]@{};
+$cs=Get-CimInstance Win32_ComputerSystem; $bios=Get-CimInstance Win32_BIOS; $bb=Get-CimInstance Win32_BaseBoard; $os=Get-CimInstance Win32_OperatingSystem;
+$o.cpu=@(Get-CimInstance Win32_Processor | ForEach-Object { [ordered]@{name=$_.Name.Trim();cores=$_.NumberOfCores;threads=$_.NumberOfLogicalProcessors;mhz=$_.MaxClockSpeed} });
+$o.gpu=@(Get-CimInstance Win32_VideoController | Where-Object {$_.Name} | ForEach-Object { [ordered]@{name=$_.Name;ram=[int64]$_.AdapterRAM;drv=$_.DriverVersion} });
+$o.mem=@(Get-CimInstance Win32_PhysicalMemory | ForEach-Object { [ordered]@{cap=[int64]$_.Capacity;speed=$_.Speed;mfr=$_.Manufacturer;slot=$_.DeviceLocator} });
+$o.disk=@(Get-CimInstance Win32_DiskDrive | ForEach-Object { [ordered]@{model=$_.Model;size=[int64]$_.Size;type=$_.MediaType} });
+$o.mon=@(Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue | Where-Object {$_.ScreenWidth} | ForEach-Object { [ordered]@{w=$_.ScreenWidth;h=$_.ScreenHeight} });
+$o.sys=[ordered]@{maker=$cs.Manufacturer;model=$cs.Model;board=($bb.Manufacturer+' '+$bb.Product);bios=($bios.Manufacturer+' '+$bios.SMBIOSBIOSVersion);os=$os.Caption;osver=$os.Version;host=$cs.Name};
+$o | ConvertTo-Json -Compress -Depth 4`);
+  const d = parseJsonArray('[' + (r.stdout || r.out).trim() + ']')[0] || {};
+  const cards = [];
+  const arr = x => Array.isArray(x) ? x : (x ? [x] : []);
+
+  cards.push(hwCard('🧠', '处理器', arr(d.cpu).map(c =>
+    [[c.name, ''], ['核心 / 线程', `${c.cores} 核 ${c.threads} 线程`], ['主频', c.mhz ? (c.mhz / 1000).toFixed(2) + ' GHz' : '-']]).flat()));
+
+  cards.push(hwCard('🎮', '显卡', arr(d.gpu).map(g =>
+    [[g.name, ''], ['显存', g.ram > 0 ? fmt(g.ram) : '共享/未知'], ['驱动版本', g.drv || '-']]).flat()));
+
+  const memRows = arr(d.mem).map(m => [`${m.slot || '内存'}`, `${fmt(m.cap)} ${m.speed ? m.speed + 'MHz' : ''} ${(m.mfr || '').trim()}`.trim()]);
+  const memTotal = arr(d.mem).reduce((s, m) => s + (m.cap || 0), 0);
+  cards.push(hwCard('💾', `内存（共 ${fmt(memTotal)}）`, memRows.length ? memRows : [['—', '未读取到']]));
+
+  cards.push(hwCard('🗄️', '硬盘', arr(d.disk).map(k =>
+    [k.model || '磁盘', `${fmt(k.size)} ${/ssd/i.test(k.type || '') ? 'SSD' : (k.type || '')}`.trim()])));
+
+  if (d.sys) {
+    const s = d.sys;
+    cards.push(hwCard('🖥️', '主机 / 系统', [
+      ['厂商型号', `${(s.maker || '').trim()} ${(s.model || '').trim()}`.trim() || '-'],
+      ['主板', (s.board || '').trim() || '-'],
+      ['BIOS', (s.bios || '').trim() || '-'],
+      ['操作系统', s.os || '-'],
+      ['系统版本', s.osver || '-'],
+      ['计算机名', s.host || '-'],
+    ]));
+  }
+  const mons = arr(d.mon);
+  if (mons.length) cards.push(hwCard('📺', '显示器', mons.map((m, i) => [`显示器 ${i + 1}`, `${m.w} × ${m.h}`])));
+
+  $('#hw-grid').innerHTML = cards.join('');
+  // 生成纯文本清单
+  hw.text = cards2text(d, arr, memTotal);
+  $('#hw-status').textContent = '读取完成。';
+}
+
+function hwCard(ico, title, kvs) {
+  const rows = kvs.filter(kv => kv[0]).map(kv =>
+    kv[1] === '' ? `<div class="hw-kv"><span class="v" style="text-align:left;font-weight:600">${esc(kv[0])}</span></div>`
+                 : `<div class="hw-kv"><span class="k">${esc(kv[0])}</span><span class="v">${esc(kv[1])}</span></div>`).join('');
+  return `<div class="hw-card"><div class="hw-head"><span class="hw-ico">${ico}</span>${esc(title)}</div>${rows}</div>`;
+}
+
+function cards2text(d, arr, memTotal) {
+  const L = [];
+  L.push('===== 本机硬件配置清单 =====');
+  L.push('生成时间：' + new Date().toLocaleString('zh-CN'));
+  L.push('');
+  arr(d.cpu).forEach(c => L.push(`处理器：${c.name}（${c.cores}核${c.threads}线程 @ ${(c.mhz / 1000).toFixed(2)}GHz）`));
+  arr(d.gpu).forEach(g => L.push(`显卡：${g.name}${g.ram > 0 ? '（' + fmt(g.ram) + '）' : ''}`));
+  L.push(`内存：共 ${fmt(memTotal)}`);
+  arr(d.mem).forEach(m => L.push(`  - ${m.slot}: ${fmt(m.cap)} ${m.speed ? m.speed + 'MHz' : ''} ${(m.mfr || '').trim()}`));
+  arr(d.disk).forEach(k => L.push(`硬盘：${k.model}（${fmt(k.size)}）`));
+  if (d.sys) { L.push(`主板：${(d.sys.board || '').trim()}`); L.push(`系统：${d.sys.os}（${d.sys.osver}）`); }
+  return L.join('\n');
+}
+
+$('#hw-scan').addEventListener('click', hwScan);
+$('#hw-copy').addEventListener('click', () => {
+  if (!hw.text) return ui.toast('请先刷新读取硬件信息', 'warn');
+  require('electron').clipboard.writeText(hw.text);
+  ui.toast('配置清单已复制到剪贴板', 'success');
+});
+$('#hw-export').addEventListener('click', async () => {
+  if (!hw.text) return ui.toast('请先刷新读取硬件信息', 'warn');
+  const dir = await ipcRenderer.invoke('pick-folder', '选择保存位置');
+  if (!dir) return;
+  const fp = path.join(dir, '硬件配置清单.txt');
+  try { fs.writeFileSync(fp, hw.text, 'utf8'); ui.toast('已保存：' + esc(fp), 'success', 4000); ipcRenderer.invoke('show-in-folder', fp); }
+  catch (e) { ui.toast('保存失败：' + esc(e.message), 'error'); }
+});
+
+/* v2.2 懒加载 */
+window.addEventListener('page-show', e => {
+  if (e.detail === 'driver' && !dvLoaded) { dvLoaded = true; dvScan(); }
+  if (e.detail === 'hardware' && !hw.text) hwScan();
+});
+
+/* ============================================================
+ * v2.3 —— 磁盘健康 (SMART)
+ * ============================================================ */
+async function dhScan() {
+  $('#dh-scan').disabled = true;
+  $('#dh-status').textContent = '正在读取硬盘健康数据…';
+  $('#dh-grid').innerHTML = '<span class="dim">读取中…</span>';
+  const r = await psRun(`
+$res=@();
+Get-PhysicalDisk -ErrorAction SilentlyContinue | ForEach-Object {
+  $d=$_; $rc=$d | Get-StorageReliabilityCounter -ErrorAction SilentlyContinue;
+  $res += [ordered]@{
+    name=$d.FriendlyName; media=$d.MediaType; bus=$d.BusType;
+    size=[int64]$d.Size; health=$d.HealthStatus; usage=$d.Usage;
+    temp=[int]$rc.Temperature; poh=[int]$rc.PowerOnHours; wear=[int]$rc.Wear;
+    readErr=[int64]$rc.ReadErrorsTotal; writeErr=[int64]$rc.WriteErrorsTotal }
+};
+ConvertTo-Json -InputObject @($res) -Compress -Depth 3`);
+  $('#dh-scan').disabled = false;
+  const rows = parseJsonArray(r.stdout || r.out);
+  if (!rows.length) {
+    $('#dh-grid').innerHTML = '<span class="dim">未读取到硬盘信息（可能需要管理员权限，或系统不支持）。</span>';
+    $('#dh-status').textContent = '';
+    return;
+  }
+  const mediaName = m => ({ 3: 'HDD 机械硬盘', 4: 'SSD 固态硬盘' }[m] || (String(m).match(/ssd/i) ? 'SSD' : (String(m).match(/hdd/i) ? 'HDD' : (m || '未知'))));
+  const busName = b => ({ 7: 'USB', 8: 'RAID', 11: 'SATA', 17: 'NVMe' }[b] || b || '');
+  const healthMap = h => {
+    const s = String(h);
+    if (s === '0' || /healthy/i.test(s)) return ['green', '健康'];
+    if (s === '1' || /warning/i.test(s)) return ['orange', '警告'];
+    return ['red', '异常'];
+  };
+  $('#dh-grid').innerHTML = rows.map(d => {
+    const [cls, txt] = healthMap(d.health);
+    const kvs = [
+      ['接口 / 类型', `${busName(d.bus)} · ${mediaName(d.media)}`],
+      ['容量', fmt(d.size)],
+      ['健康状态', `<span class="tag ${cls}">${txt}</span>`],
+    ];
+    if (d.temp > 0) kvs.push(['温度', d.temp + ' °C']);
+    if (d.poh > 0) kvs.push(['通电时长', `${d.poh} 小时（约 ${(d.poh / 24 / 365).toFixed(1)} 年）`]);
+    if (d.wear > 0) kvs.push(['SSD 损耗', `${d.wear}%（剩余寿命约 ${100 - d.wear}%）`]);
+    if (d.readErr > 0 || d.writeErr > 0) kvs.push(['读写错误', `读 ${d.readErr} / 写 ${d.writeErr}`]);
+    const rows2 = kvs.map(kv => `<div class="hw-kv"><span class="k">${esc(kv[0])}</span><span class="v">${kv[1]}</span></div>`).join('');
+    return `<div class="hw-card"><div class="hw-head"><span class="hw-ico">🗄️</span>${esc(d.name || '硬盘')}</div>${rows2}</div>`;
+  }).join('');
+  const bad = rows.filter(d => healthMap(d.health)[0] !== 'green').length;
+  $('#dh-status').textContent = bad ? `⚠ 有 ${bad} 块硬盘状态异常，建议尽快备份数据。` : '所有硬盘健康状态良好。';
+}
+$('#dh-scan').addEventListener('click', dhScan);
+
+/* ============================================================
+ * v2.3 —— 网络工具
+ * ============================================================ */
+const nw = { timer: null, last: null };
+
+async function nwInfo() {
+  $('#nw-info').innerHTML = '读取中…';
+  const r = await psRun(`
+$ip=Get-NetIPConfiguration -ErrorAction SilentlyContinue | Where-Object {$_.IPv4Address -and $_.NetAdapter.Status -eq 'Up'} | Select-Object -First 1;
+$o=[ordered]@{
+  ipv4=($ip.IPv4Address.IPAddress -join ', ');
+  gw=($ip.IPv4DefaultGateway.NextHop -join ', ');
+  dns=($ip.DNSServer | Where-Object {$_.AddressFamily -eq 2} | ForEach-Object {$_.ServerAddresses} ) -join ', ';
+  adapter=$ip.InterfaceAlias;
+};
+try{ $pub=(Invoke-RestMethod -Uri 'https://api.ipify.org?format=json' -TimeoutSec 4).ip; $o.pub=$pub }catch{ $o.pub='(获取失败)' }
+$o | ConvertTo-Json -Compress`);
+  const d = parseJsonArray('[' + (r.stdout || r.out).trim() + ']')[0] || {};
+  $('#nw-info').innerHTML = [
+    ['网卡', d.adapter], ['内网 IP', d.ipv4], ['网关', d.gw],
+    ['DNS', d.dns], ['公网 IP', d.pub],
+  ].filter(kv => kv[1]).map(kv => `<div class="hw-kv"><span class="k">${esc(kv[0])}</span><span class="v">${esc(kv[1])}</span></div>`).join('');
+}
+
+function nwStartSpeed() {
+  if (nw.timer) clearInterval(nw.timer);
+  nw.timer = setInterval(async () => {
+    if (!$('#page-network').classList.contains('active')) return;
+    const r = await psRun(`$s=Get-NetAdapterStatistics -ErrorAction SilentlyContinue | Measure-Object -Property ReceivedBytes,SentBytes -Sum; $rx=(Get-NetAdapterStatistics | Measure-Object ReceivedBytes -Sum).Sum; $tx=(Get-NetAdapterStatistics | Measure-Object SentBytes -Sum).Sum; Write-Output "$rx $tx"`);
+    const m = (r.stdout || '').trim().match(/(\d+)\s+(\d+)/);
+    if (!m) return;
+    const rx = +m[1], tx = +m[2], now = Date.now();
+    if (nw.last) {
+      const dt = (now - nw.last.t) / 1000;
+      const dn = Math.max(0, (rx - nw.last.rx) / dt), up = Math.max(0, (tx - nw.last.tx) / dt);
+      $('#nw-down').textContent = fmt(dn) + '/s';
+      $('#nw-up').textContent = fmt(up) + '/s';
+      $('#nw-down-bar').style.width = Math.min(100, dn / (1048576) * 100).toFixed(0) + '%';
+      $('#nw-up-bar').style.width = Math.min(100, up / (524288) * 100).toFixed(0) + '%';
+    }
+    nw.last = { rx, tx, t: now };
+  }, 1500);
+}
+
+async function nwPorts() {
+  $('#nw-right-title').textContent = '端口占用（监听中的连接）';
+  $('#nw-out').textContent = '正在读取…';
+  const r = await psRun(`
+Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Sort-Object LocalPort -Unique | ForEach-Object {
+  $p=Get-Process -Id $_.OwningProcess -ErrorAction SilentlyContinue;
+  '{0,-7} {1}' -f $_.LocalPort, ($p.ProcessName + ' (PID ' + $_.OwningProcess + ')')
+} | Select-Object -First 60 | Out-String`);
+  $('#nw-out').textContent = (r.stdout || '').trim() || '未读取到监听端口。';
+}
+
+async function nwPing() {
+  const host = $('#nw-ping').value.trim();
+  if (!host) return ui.toast('请输入域名或 IP', 'warn');
+  $('#nw-right-title').textContent = 'Ping ' + host;
+  $('#nw-out').textContent = '正在 ping…';
+  const r = await execCmd(`ping -n 4 ${host.replace(/[^\w.\-:]/g, '')}`);
+  $('#nw-out').textContent = (r.out || '').trim();
+}
+
+$('#nw-scan').addEventListener('click', () => { nwInfo(); nwStartSpeed(); });
+$('#nw-ports').addEventListener('click', nwPorts);
+$('#nw-pingbtn').addEventListener('click', nwPing);
+$('#nw-ping').addEventListener('keydown', e => { if (e.key === 'Enter') nwPing(); });
+let nwLoaded = false;
+
+/* ============================================================
+ * v2.3 —— 深度清理（空文件夹 / 失效快捷方式）
+ * ============================================================ */
+const dc = { items: [], busy: false };
+
+async function dcScanEmpty() {
+  const dir = $('#dc-dir').value;
+  if (!dir || !fs.existsSync(dir)) return ui.toast('请先选择要扫描的目录', 'warn');
+  dc.items = []; dc.busy = true;
+  $('#dc-scan').disabled = true; $('#dc-clean').disabled = true;
+  $('#dc-status').textContent = '正在扫描空文件夹…';
+  // 递归自底向上判断空目录（含只包含空子目录的目录）
+  const emptyDirs = [];
+  async function walk(d) {
+    let entries;
+    try { entries = await fsp.readdir(d, { withFileTypes: true }); } catch { return false; }
+    let hasFile = false;
+    for (const e of entries) {
+      if (e.isSymbolicLink()) { hasFile = true; continue; }
+      if (e.isDirectory()) { const childEmpty = await walk(path.join(d, e.name)); if (!childEmpty) hasFile = true; }
+      else hasFile = true;
+    }
+    if (!hasFile && d !== dir) emptyDirs.push(d);
+    return !hasFile;
+  }
+  try { await walk(dir); } catch { }
+  for (const d of emptyDirs) dc.items.push({ type: '空文件夹', path: d, note: '不含任何文件', kind: 'dir' });
+  dc.busy = false; $('#dc-scan').disabled = false;
+  dcRender();
+  $('#dc-status').textContent = `找到 ${emptyDirs.length} 个空文件夹。`;
+  $('#dc-clean').disabled = !dc.items.length;
+}
+
+async function dcScanShortcuts() {
+  dc.items = []; dc.busy = true;
+  $('#dc-shortcuts').disabled = true; $('#dc-clean').disabled = true;
+  $('#dc-status').textContent = '正在扫描失效快捷方式…';
+  const desktops = [
+    path.join(os.homedir(), 'Desktop'),
+    path.join(PROGRAM_DATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+    path.join(APPDATA, 'Microsoft', 'Windows', 'Start Menu', 'Programs'),
+  ].filter(d => fs.existsSync(d)).map(d => `'${psq(d)}'`).join(',');
+  const r = await psRun(`
+$sh=New-Object -ComObject WScript.Shell;
+$res=@();
+foreach($root in @(${desktops})){
+  Get-ChildItem -Path $root -Filter *.lnk -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+    try{ $t=$sh.CreateShortcut($_.FullName).TargetPath;
+      if($t -and -not (Test-Path $t)){ $res += [ordered]@{lnk=$_.FullName;target=$t} } }catch{}
+  }
+};
+ConvertTo-Json -InputObject @($res) -Compress`);
+  for (const x of parseJsonArray(r.stdout || r.out))
+    dc.items.push({ type: '失效快捷方式', path: x.lnk, note: '目标不存在', kind: 'file' });
+  dc.busy = false; $('#dc-shortcuts').disabled = false;
+  dcRender();
+  $('#dc-status').textContent = `找到 ${dc.items.length} 个失效快捷方式（目标程序已被删除/卸载）。`;
+  $('#dc-clean').disabled = !dc.items.length;
+}
+
+function dcRender() {
+  $('#dc-table tbody').innerHTML = dc.items.map((it, i) => `
+    <tr>
+      <td><input type="checkbox" data-idx="${i}" checked></td>
+      <td><span class="tag ${it.kind === 'dir' ? '' : 'orange'}">${esc(it.type)}</span></td>
+      <td class="dim" title="${esc(it.path)}">${esc(it.path)}</td>
+      <td class="dim">${esc(it.note)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:24px" class="dim">未发现可清理项</td></tr>';
+  dc.items.forEach((it, i) => it.checked = true);
+  $('#dc-table tbody').querySelectorAll('input').forEach(cb =>
+    cb.addEventListener('change', () => dc.items[cb.dataset.idx].checked = cb.checked));
+  $('#dc-all').checked = true;
+}
+
+async function dcClean() {
+  const picked = dc.items.filter(i => i.checked);
+  if (!picked.length) return ui.toast('没有勾选任何项目', 'warn');
+  if (!await ui.confirm('深度清理', `将删除 <b>${picked.length}</b> 项（空文件夹直接删除，失效快捷方式移入回收站）。`, { okText: '清理', danger: true })) return;
+  ui.busy(true, '正在清理…');
+  const toRecycle = picked.filter(i => i.kind === 'file').map(i => i.path);
+  let dirOk = 0;
+  for (const it of picked.filter(i => i.kind === 'dir')) { try { fs.rmdirSync(it.path); dirOk++; } catch { } }
+  let fileRes = { ok: 0 };
+  if (toRecycle.length) fileRes = await recycleFiles(toRecycle);
+  ui.busy(false);
+  dc.items = dc.items.filter(i => fs.existsSync(i.path));
+  dcRender();
+  $('#dc-clean').disabled = !dc.items.length;
+  ui.toast(`✅ 已清理 ${dirOk} 个空文件夹、${fileRes.ok} 个失效快捷方式`, 'success', 4500);
+}
+
+$('#dc-browse').addEventListener('click', async () => {
+  const p = await ipcRenderer.invoke('pick-folder', '选择要深度扫描的目录');
+  if (p) $('#dc-dir').value = p;
+});
+$('#dc-scan').addEventListener('click', dcScanEmpty);
+$('#dc-shortcuts').addEventListener('click', dcScanShortcuts);
+$('#dc-clean').addEventListener('click', dcClean);
+$('#dc-all').addEventListener('change', () => {
+  const on = $('#dc-all').checked;
+  dc.items.forEach(i => i.checked = on);
+  $('#dc-table tbody').querySelectorAll('input[data-idx]').forEach(cb => cb.checked = on);
+});
+
+/* ============================================================
+ * v2.3 —— 右键菜单管理
+ * ============================================================ */
+const cx = { items: [], sel: -1 };
+const CX_ROOTS = [
+  ['HKCR:\\*\\shell', '所有文件'],
+  ['HKCR:\\Directory\\shell', '文件夹'],
+  ['HKCR:\\Directory\\Background\\shell', '桌面空白处'],
+  ['HKCR:\\Drive\\shell', '磁盘'],
+];
+const CX_BACKUP = 'HKCU:\\Software\\DiskMate\\DisabledContextMenu';
+
+async function cxLoad() {
+  $('#cx-status').textContent = '正在读取右键菜单项…';
+  cx.items = []; cx.sel = -1;
+  const roots = CX_ROOTS.map(x => `@('${x[0]}','${psq(x[1])}')`).join(',');
+  const r = await psRun(`
+if(-not (Get-PSDrive HKCR -ErrorAction SilentlyContinue)){ New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT | Out-Null }
+$res=@();
+foreach($pair in @(${roots})){
+  $root=$pair[0]; $loc=$pair[1];
+  Get-ChildItem -Path $root -ErrorAction SilentlyContinue | ForEach-Object {
+    $key=$_; $name=$key.PSChildName;
+    $disp=(Get-ItemProperty -Path $key.PSPath -Name '(default)' -ErrorAction SilentlyContinue).'(default)';
+    $cmd=(Get-ItemProperty -Path ($key.PSPath+'\\command') -Name '(default)' -ErrorAction SilentlyContinue).'(default)';
+    $res += [ordered]@{name=$name; disp=[string]$disp; loc=$loc; root=$root; cmd=[string]$cmd; enabled=$true}
+  }
+};
+$bk=Get-Item -Path '${CX_BACKUP}' -ErrorAction SilentlyContinue;
+if($bk){ foreach($n in $bk.GetValueNames()){ if($n){ $v=$bk.GetValue($n) | ConvertFrom-Json; $res += [ordered]@{name=$v.name;disp=$v.disp;loc=$v.loc;root=$v.root;cmd=$v.cmd;enabled=$false} } } };
+ConvertTo-Json -InputObject @($res) -Compress -Depth 3`);
+  const sys = /^(open|edit|print|runas|find|explore|cmd|pintohome|pintostartscreen|windows\.|properties)/i;
+  for (const x of parseJsonArray(r.stdout || r.out)) {
+    if (x.enabled && sys.test(x.name)) continue; // 隐藏系统内置项
+    cx.items.push(x);
+  }
+  cxRender();
+  $('#cx-count').textContent = `共 ${cx.items.length} 项（${cx.items.filter(i => i.enabled).length} 项启用）`;
+  $('#cx-status').textContent = '';
+}
+
+function cxRender() {
+  $('#cx-table tbody').innerHTML = cx.items.map((it, i) => `
+    <tr data-idx="${i}">
+      <td>${it.enabled ? '<span class="tag green">启用</span>' : '<span class="tag">已禁用</span>'}</td>
+      <td title="${esc(it.disp || it.name)}">${esc((it.disp || it.name).replace(/&/g, ''))}</td>
+      <td class="dim">${esc(it.loc)}</td>
+      <td class="dim" title="${esc(it.cmd)}">${esc(it.cmd)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:24px" class="dim">未发现第三方右键项</td></tr>';
+  cx.sel = -1;
+}
+
+async function cxToggle(disable) {
+  if (cx.sel < 0) return ui.toast('请先选中一项', 'warn');
+  const it = cx.items[cx.sel];
+  if (it.enabled !== disable) return ui.toast(disable ? '该项已禁用' : '该项已启用', 'warn');
+  try {
+    if (disable) {
+      // 通过在键上加 LegacyDisable 值来禁用（可逆），并备份元数据
+      const r = await psRun(`
+if(-not (Get-PSDrive HKCR -ErrorAction SilentlyContinue)){ New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT | Out-Null }
+Set-ItemProperty -Path '${psq(it.root)}\\${psq(it.name)}' -Name 'LegacyDisable' -Value '' -ErrorAction Stop;
+New-Item -Path '${CX_BACKUP}' -Force | Out-Null;
+$meta=@{name='${psq(it.name)}';disp='${psq(it.disp)}';loc='${psq(it.loc)}';root='${psq(it.root)}';cmd='${psq(it.cmd)}'} | ConvertTo-Json -Compress;
+Set-ItemProperty -Path '${CX_BACKUP}' -Name '${psq(it.loc + '|' + it.name)}' -Value $meta;
+Write-Output OK`);
+      if (!/OK/.test(r.stdout || '')) throw new Error((r.stderr || r.out).trim().slice(0, 150));
+    } else {
+      const r = await psRun(`
+if(-not (Get-PSDrive HKCR -ErrorAction SilentlyContinue)){ New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT | Out-Null }
+Remove-ItemProperty -Path '${psq(it.root)}\\${psq(it.name)}' -Name 'LegacyDisable' -ErrorAction SilentlyContinue;
+Remove-ItemProperty -Path '${CX_BACKUP}' -Name '${psq(it.loc + '|' + it.name)}' -ErrorAction SilentlyContinue;
+Write-Output OK`);
+      if (!/OK/.test(r.stdout || '')) throw new Error((r.stderr || r.out).trim().slice(0, 150));
+    }
+    await cxLoad();
+    ui.toast(disable ? `已禁用「${esc(it.disp || it.name)}」` : `已启用「${esc(it.disp || it.name)}」`, 'success');
+  } catch (e) { ui.toast((disable ? '禁用' : '启用') + '失败：' + esc(e.message), 'error', 5000); }
+}
+
+$('#cx-refresh').addEventListener('click', cxLoad);
+$('#cx-disable').addEventListener('click', () => cxToggle(true));
+$('#cx-enable').addEventListener('click', () => cxToggle(false));
+bindRowSelect($('#cx-table tbody'), i => cx.sel = i);
+let cxLoaded = false;
+
+/* v2.3 懒加载 */
+window.addEventListener('page-show', e => {
+  if (e.detail === 'diskhealth') { /* 手动触发 */ }
+  if (e.detail === 'network' && !nwLoaded) { nwLoaded = true; nwInfo(); nwStartSpeed(); }
+  if (e.detail === 'ctxmenu' && !cxLoaded) { cxLoaded = true; cxLoad(); }
+});
+
+
+/* ============================================================
+ * v2.4 —— 注册表清理（保守：仅清失效引用，先备份 .reg）
+ * ============================================================ */
+const rg = { items: [], busy: false };
+
+async function rgScan() {
+  if (rg.busy) return;
+  rg.busy = true; $('#rg-scan').disabled = true; $('#rg-clean').disabled = true;
+  $('#rg-status').textContent = '正在扫描注册表失效引用…';
+  rg.items = [];
+  const r = await psRun(`
+$res=@();
+foreach($base in 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall','HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall'){
+  Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {
+    $p=Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue;
+    if($p.DisplayName -and $p.InstallLocation){
+      $loc=$p.InstallLocation.Trim('"').TrimEnd('\\');
+      if($loc.Length -gt 3 -and $loc -match '^[A-Za-z]:\\\\' -and -not (Test-Path -LiteralPath $loc)){
+        $res += [ordered]@{type='残留卸载项';name=[string]$p.DisplayName;reason='安装目录不存在: '+$loc;path=($_.PSPath -replace '.*Registry::','');valname=''}
+      }
+    }
+  }
+};
+foreach($base in 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run','HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'){
+  $k=Get-Item $base -ErrorAction SilentlyContinue;
+  if($k){ foreach($n in $k.GetValueNames()){ if(-not $n){continue}
+    $v=[string]$k.GetValue($n); $m=[regex]::Match($v,'^"?([A-Za-z]:\\\\[^"]+?\.exe)');
+    if($m.Success -and -not (Test-Path -LiteralPath $m.Groups[1].Value)){
+      $res += [ordered]@{type='失效启动项';name=$n;reason='程序不存在: '+$m.Groups[1].Value;path=$base;valname=$n}
+    }
+  }}
+};
+foreach($base in 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths','HKLM:\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\App Paths'){
+  Get-ChildItem $base -ErrorAction SilentlyContinue | ForEach-Object {
+    $d=(Get-ItemProperty $_.PSPath -Name '(default)' -ErrorAction SilentlyContinue).'(default)';
+    if($d){ $ex=$d.Trim('"'); if($ex -match '^[A-Za-z]:\\\\' -and -not (Test-Path -LiteralPath $ex)){
+      $res += [ordered]@{type='失效程序路径';name=$_.PSChildName;reason='程序不存在: '+$ex;path=($_.PSPath -replace '.*Registry::','');valname=''}
+    }}
+  }
+};
+ConvertTo-Json -InputObject @($res) -Compress -Depth 3`);
+  rg.items = parseJsonArray(r.stdout || r.out).map(x => ({ ...x, checked: true }));
+  rg.busy = false; $('#rg-scan').disabled = false;
+  rgRender();
+  $('#rg-total').textContent = rg.items.length ? `发现 ${rg.items.length} 个失效项` : '';
+  $('#rg-status').textContent = rg.items.length ? '扫描完成。清理前会自动导出 .reg 备份文件。' : '未发现失效的注册表引用，注册表很干净 🎉';
+  $('#rg-clean').disabled = !rg.items.length;
+}
+
+function rgRender() {
+  $('#rg-table tbody').innerHTML = rg.items.map((it, i) => `
+    <tr>
+      <td><input type="checkbox" data-idx="${i}" ${it.checked ? 'checked' : ''}></td>
+      <td><span class="tag orange">${esc(it.type)}</span></td>
+      <td title="${esc(it.name)}">${esc(it.name)}</td>
+      <td class="dim" title="${esc(it.reason)}">${esc(it.reason)}</td>
+    </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:24px" class="dim">未发现失效项</td></tr>';
+  $('#rg-table tbody').querySelectorAll('input').forEach(cb =>
+    cb.addEventListener('change', () => rg.items[cb.dataset.idx].checked = cb.checked));
+  $('#rg-all').checked = rg.items.length > 0;
+}
+
+async function rgClean() {
+  const picked = rg.items.filter(i => i.checked);
+  if (!picked.length) return ui.toast('没有勾选任何项目', 'warn');
+  if (!await ui.confirm('清理注册表', `将清理 <b>${picked.length}</b> 个失效项。<br><span class="dim">清理前会先导出 .reg 备份到数据目录，若有异常可双击备份还原。</span>`, { okText: '备份并清理', danger: true })) return;
+  ui.busy(true, '正在导出备份并清理…');
+  fs.mkdirSync(DM_DIR, { recursive: true });
+  const backup = path.join(DM_DIR, 'reg-backup-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '') + '.reg');
+  const toReg = p => p.replace(/^HKLM:\\/, 'HKLM\\').replace(/^HKCU:\\/, 'HKCU\\').replace(/^HKCR:\\/, 'HKCR\\');
+  const parts = picked.map(it => {
+    const rp = toReg(it.path);
+    const del = it.type === '失效启动项'
+      ? `reg delete "${rp}" /v "${String(it.valname).replace(/"/g, '')}" /f >nul 2>&1 && echo OK`
+      : `reg delete "${rp}" /f >nul 2>&1 && echo OK`;
+    return `reg export "${rp}" "${backup}.tmp" /y >nul 2>&1 & type "${backup}.tmp" >> "${backup}" 2>nul & ${del}`;
+  });
+  const r = await execCmd(parts.join(' & ') + ` & del "${backup}.tmp" >nul 2>&1`);
+  const ok = (r.out.match(/OK/g) || []).length;
+  const fail = picked.length - ok;
+  ui.busy(false);
+  await rgScan();
+  ui.toast(`✅ 已清理 ${ok} 个失效项，备份已存到数据目录` + (fail ? `（${fail} 个失败）` : ''), fail ? 'warn' : 'success', 5000);
+}
+
+$('#rg-scan').addEventListener('click', rgScan);
+$('#rg-clean').addEventListener('click', rgClean);
+$('#rg-all').addEventListener('change', () => {
+  const on = $('#rg-all').checked;
+  rg.items.forEach(i => i.checked = on);
+  $('#rg-table tbody').querySelectorAll('input[data-idx]').forEach(cb => cb.checked = on);
+});
+let rgLoaded = false;
+
+/* ============================================================
+ * v2.4 —— 一键优化（可逆系统调优）
+ * ============================================================ */
+const OPT_ITEMS = [
+  { id: 'power', name: '高性能电源计划', desc: '切换到高性能电源方案，减少 CPU 降频带来的卡顿',
+    check: async () => { const r = await psRun(`(powercfg /getactivescheme)`); return /高性能|High performance|8c5e7fda/i.test(r.stdout || ''); },
+    apply: () => execCmd('powercfg -setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c'),
+    revert: () => execCmd('powercfg -setactive 381b4222-f694-41f0-9685-ff5bb260df2e') },
+  { id: 'visual', name: '视觉效果偏向性能', desc: '关闭部分窗口动画与阴影，界面更跟手（不影响字体清晰度）',
+    check: async () => { const r = await psRun(`(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name VisualFXSetting -ErrorAction SilentlyContinue).VisualFXSetting`); return String((r.stdout || '').trim()) === '2'; },
+    apply: () => psRun(`New-Item 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Force|Out-Null;Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name VisualFXSetting -Value 2`),
+    revert: () => psRun(`Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects' -Name VisualFXSetting -Value 0 -ErrorAction SilentlyContinue`) },
+  { id: 'menushow', name: '加快菜单弹出速度', desc: '缩短菜单展开延迟（MenuShowDelay 400→0）',
+    check: async () => { const r = await psRun(`(Get-ItemProperty 'HKCU:\\Control Panel\\Desktop' -Name MenuShowDelay -ErrorAction SilentlyContinue).MenuShowDelay`); return String((r.stdout || '').trim()) === '0'; },
+    apply: () => psRun(`Set-ItemProperty 'HKCU:\\Control Panel\\Desktop' -Name MenuShowDelay -Value 0`),
+    revert: () => psRun(`Set-ItemProperty 'HKCU:\\Control Panel\\Desktop' -Name MenuShowDelay -Value 400`) },
+  { id: 'bgapps', name: '关闭后台应用', desc: '禁止 UWP 应用在后台自动运行，省内存省电',
+    check: async () => { const r = await psRun(`(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -Name GlobalUserDisabled -ErrorAction SilentlyContinue).GlobalUserDisabled`); return String((r.stdout || '').trim()) === '1'; },
+    apply: () => psRun(`New-Item 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -Force|Out-Null;Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -Name GlobalUserDisabled -Value 1`),
+    revert: () => psRun(`Set-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications' -Name GlobalUserDisabled -Value 0 -ErrorAction SilentlyContinue`) },
+  { id: 'gamebar', name: '关闭 Xbox Game Bar', desc: '关闭游戏栏与后台录制，减少资源占用',
+    check: async () => { const r = await psRun(`(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\GameBar' -Name UseNexusForGameBarEnabled -ErrorAction SilentlyContinue).UseNexusForGameBarEnabled`); return String((r.stdout || '').trim()) === '0'; },
+    apply: () => psRun(`New-Item 'HKCU:\\Software\\Microsoft\\GameBar' -Force|Out-Null;Set-ItemProperty 'HKCU:\\Software\\Microsoft\\GameBar' -Name UseNexusForGameBarEnabled -Value 0;Set-ItemProperty 'HKCU:\\System\\GameConfigStore' -Name GameDVR_Enabled -Value 0 -ErrorAction SilentlyContinue`),
+    revert: () => psRun(`Set-ItemProperty 'HKCU:\\Software\\Microsoft\\GameBar' -Name UseNexusForGameBarEnabled -Value 1 -ErrorAction SilentlyContinue`) },
+];
+const op = { state: {} };
+
+async function opRefresh() {
+  $('#op-status').textContent = '正在读取当前设置…';
+  for (const it of OPT_ITEMS) { try { op.state[it.id] = await it.check(); } catch { op.state[it.id] = false; } }
+  opRender();
+  const on = Object.values(op.state).filter(Boolean).length;
+  $('#op-hint').textContent = `已优化 ${on}/${OPT_ITEMS.length} 项`;
+  $('#op-status').textContent = '勾选想启用的优化项，取消勾选可还原。';
+}
+
+function opRender() {
+  $('#op-list').innerHTML = OPT_ITEMS.map(it => `
+    <div class="jk-row">
+      <input type="checkbox" data-id="${it.id}" ${op.state[it.id] ? 'checked' : ''}>
+      <div class="jk-info">
+        <div class="jk-name">${esc(it.name)}${op.state[it.id] ? ' <span class="tag green">已启用</span>' : ''}</div>
+        <div class="jk-desc">${esc(it.desc)}</div>
+      </div>
+    </div>`).join('');
+  $('#op-list').querySelectorAll('input').forEach(cb =>
+    cb.addEventListener('change', () => op.state[cb.dataset.id] = cb.checked));
+}
+
+async function opApply() {
+  $('#op-apply').disabled = true;
+  ui.busy(true, '正在应用优化设置…');
+  let changed = 0;
+  for (const it of OPT_ITEMS) {
+    const want = !!op.state[it.id];
+    let cur; try { cur = await it.check(); } catch { cur = false; }
+    if (want !== cur) { try { await (want ? it.apply() : it.revert()); changed++; } catch { } }
+  }
+  ui.busy(false); $('#op-apply').disabled = false;
+  await opRefresh();
+  ui.toast(changed ? `✅ 已应用 ${changed} 项更改（部分需重启或重开资源管理器生效）` : '设置无变化', 'success', 4500);
+}
+
+$('#op-apply').addEventListener('click', opApply);
+$('#op-refresh').addEventListener('click', opRefresh);
+let opLoaded = false;
+
+/* ============================================================
+ * v2.4 —— 每周自动清理（计划任务）
+ * ============================================================ */
+const AUTOCLEAN_TASK = 'DiskMate_AutoClean';
+async function autocleanStatus() {
+  const r = await psRun(`if(Get-ScheduledTask -TaskName '${AUTOCLEAN_TASK}' -ErrorAction SilentlyContinue){Write-Output YES}else{Write-Output NO}`);
+  return /YES/.test(r.stdout || '');
+}
+async function autocleanSet(on) {
+  if (on) {
+    const inner = `Remove-Item -Path \\"$env:TEMP\\*\\" -Recurse -Force -ErrorAction SilentlyContinue; Remove-Item -Path \\"$env:WINDIR\\Temp\\*\\" -Recurse -Force -ErrorAction SilentlyContinue; Clear-RecycleBin -Force -ErrorAction SilentlyContinue`;
+    const r = await psRun(`
+$a=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -WindowStyle Hidden -Command "${inner}"';
+$t=New-ScheduledTaskTrigger -Weekly -DaysOfWeek Sunday -At 3am;
+$p=New-ScheduledTaskPrincipal -UserId $env:USERNAME -RunLevel Highest;
+Register-ScheduledTask -TaskName '${AUTOCLEAN_TASK}' -Action $a -Trigger $t -Principal $p -Force -ErrorAction Stop | Out-Null; Write-Output OK`);
+    return /OK/.test(r.stdout || '');
+  } else {
+    await psRun(`Unregister-ScheduledTask -TaskName '${AUTOCLEAN_TASK}' -Confirm:$false -ErrorAction SilentlyContinue`);
+    return true;
+  }
+}
+(async () => {
+  const sw = $('#set-autoclean');
+  if (!sw) return;
+  sw.checked = await autocleanStatus();
+  sw.addEventListener('change', async () => {
+    const ok = await autocleanSet(sw.checked);
+    if (ok) ui.toast(sw.checked ? '已开启每周日凌晨 3 点自动清理' : '已关闭自动清理', 'success');
+    else { ui.toast('设置失败（需管理员权限）', 'error'); sw.checked = !sw.checked; }
+  });
+})();
+
+/* v2.4 懒加载 */
+window.addEventListener('page-show', e => {
+  if (e.detail === 'regclean' && !rgLoaded) { rgLoaded = true; rgScan(); }
+  if (e.detail === 'optimize' && !opLoaded) { opLoaded = true; opRefresh(); }
 });

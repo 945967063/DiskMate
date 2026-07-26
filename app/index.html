@@ -49,6 +49,30 @@
     <div class="nav-item" data-page="update">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
       <span>软件更新</span></div>
+    <div class="nav-item" data-page="driver">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+      <span>驱动管理</span></div>
+    <div class="nav-item" data-page="hardware">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+      <span>硬件信息</span></div>
+    <div class="nav-item" data-page="diskhealth">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+      <span>磁盘健康</span></div>
+    <div class="nav-item" data-page="network">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.8a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></svg>
+      <span>网络工具</span></div>
+    <div class="nav-item" data-page="deepclean">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7 7M9 6l9 9-3 3-9-9M13 13l6 6"/></svg>
+      <span>深度清理</span></div>
+    <div class="nav-item" data-page="ctxmenu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+      <span>右键菜单</span></div>
+    <div class="nav-item" data-page="regclean">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
+      <span>注册表清理</span></div>
+    <div class="nav-item" data-page="optimize">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/><circle cx="12" cy="12" r="3"/></svg>
+      <span>一键优化</span></div>
     <div class="nav-item" data-page="startup">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19c2-6 5-11 14-14-3 9-8 12-14 14zM5 19l-2 2M9 12l3 3"/></svg>
       <span>启动项管理</span></div>
@@ -63,7 +87,7 @@
       <div class="nav-item" data-page="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.7l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.7-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.2a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.7.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.7 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.2a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.7l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.7.3 1.6 1.6 0 001-1.5V3a2 2 0 114 0v.2a1.6 1.6 0 001 1.5 1.6 1.6 0 001.7-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.7 1.6 1.6 0 001.5 1h.2a2 2 0 110 4h-.2a1.6 1.6 0 00-1.5 1z"/></svg>
         <span>设置</span></div>
-      <div id="ver-tag">v2.1.0</div>
+      <div id="ver-tag">v2.4.0</div>
     </div>
   </div>
 
@@ -352,6 +376,163 @@
       <div class="status" id="up-status"></div>
     </div>
 
+    <!-- 驱动管理 -->
+    <div class="page" id="page-driver">
+      <h2>驱动管理</h2>
+      <div class="sub">查看已安装的硬件驱动，标记异常设备，一键备份全部驱动到指定文件夹（重装系统后可离线还原）。备份通过系统 DISM/pnputil 完成。</div>
+      <div class="toolbar">
+        <button id="dv-scan">🔍 扫描驱动</button>
+        <input type="text" id="dv-filter" placeholder="按设备名/厂商筛选…" style="width:200px">
+        <label><input type="checkbox" id="dv-onlybad"> 只看异常设备</label>
+        <div class="spacer"></div>
+        <button id="dv-backup">💾 备份全部驱动</button>
+        <span class="total" id="dv-total"></span>
+      </div>
+      <div class="panel">
+        <table id="dv-table">
+          <thead><tr>
+            <th style="width:60px">状态</th><th style="width:250px">设备</th>
+            <th style="width:130px">厂商</th><th style="width:120px">驱动版本</th>
+            <th style="width:100px">日期</th><th>类别</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="status" id="dv-status"></div>
+    </div>
+
+    <!-- 硬件信息 -->
+    <div class="page" id="page-hardware">
+      <h2>硬件信息</h2>
+      <div class="sub">查看本机核心硬件配置。可用于配置核对、二手交易验机、升级前查询。</div>
+      <div class="toolbar">
+        <button id="hw-scan">🔄 刷新</button>
+        <button class="gray" id="hw-copy">📋 复制配置清单</button>
+        <button class="gray" id="hw-export">💾 导出为 TXT</button>
+      </div>
+      <div class="panel" style="padding:16px;overflow:auto">
+        <div id="hw-grid" class="hw-grid"><span class="dim">点击「刷新」读取硬件信息…</span></div>
+      </div>
+      <div class="status" id="hw-status"></div>
+    </div>
+
+    <!-- 磁盘健康 -->
+    <div class="page" id="page-diskhealth">
+      <h2>磁盘健康</h2>
+      <div class="sub">读取硬盘 SMART 健康状态、通电时长、读写量、温度与预估寿命。发现「警告/损坏」应尽快备份数据并考虑更换硬盘。</div>
+      <div class="toolbar">
+        <button id="dh-scan">🔍 检测硬盘</button>
+        <span class="dim">数据来源：Windows 存储子系统（Get-PhysicalDisk / 可靠性计数器）</span>
+      </div>
+      <div class="panel" style="padding:16px;overflow:auto">
+        <div id="dh-grid" class="hw-grid"><span class="dim">点击「检测硬盘」开始…</span></div>
+      </div>
+      <div class="status" id="dh-status"></div>
+    </div>
+
+    <!-- 网络工具 -->
+    <div class="page" id="page-network">
+      <h2>网络工具</h2>
+      <div class="sub">查看本机网络信息、实时网速、端口占用，以及常用网络诊断。</div>
+      <div class="toolbar">
+        <button id="nw-scan">🔄 刷新信息</button>
+        <button class="gray" id="nw-ports">查看端口占用</button>
+        <input type="text" id="nw-ping" placeholder="输入域名/IP 测试连通，如 baidu.com" style="width:230px">
+        <button class="gray" id="nw-pingbtn">Ping</button>
+      </div>
+      <div id="home-grid" style="grid-template-columns:340px 1fr">
+        <div class="card">
+          <h3>实时网速</h3>
+          <div class="drive-row"><div class="dr-head"><span>⬇ 下载</span><span class="dim" id="nw-down">-- KB/s</span></div><div class="bar"><i id="nw-down-bar" style="width:0%"></i></div></div>
+          <div class="drive-row"><div class="dr-head"><span>⬆ 上传</span><span class="dim" id="nw-up">-- KB/s</span></div><div class="bar"><i id="nw-up-bar" style="width:0%"></i></div></div>
+          <h3 style="margin-top:14px">网络信息</h3>
+          <div id="nw-info" class="dim">读取中…</div>
+        </div>
+        <div class="card" style="overflow:auto"><h3 id="nw-right-title">端口 / 诊断输出</h3><pre id="nw-out" style="white-space:pre-wrap;word-break:break-all;font-size:12px;font-family:Consolas,monospace;color:var(--text2);user-select:text;margin:0"></pre></div>
+      </div>
+      <div class="status" id="nw-status"></div>
+    </div>
+
+    <!-- 深度清理 -->
+    <div class="page" id="page-deepclean">
+      <h2>深度清理</h2>
+      <div class="sub">扫描常规垃圾清理覆盖不到的冗余：空文件夹、失效快捷方式、无效的开始菜单项等。每项列出详情，确认后再清理。</div>
+      <div class="toolbar">
+        <input type="text" id="dc-dir" style="width:260px" placeholder="选择要深度扫描的目录…" readonly>
+        <button class="gray" id="dc-browse">浏览…</button>
+        <button id="dc-scan">🔍 扫描</button>
+        <button class="gray" id="dc-shortcuts">🔗 扫描失效快捷方式</button>
+        <div class="spacer"></div>
+        <button class="red" id="dc-clean" disabled>🧹 清理勾选</button>
+      </div>
+      <div class="panel">
+        <table id="dc-table">
+          <thead><tr>
+            <th style="width:40px"><input type="checkbox" id="dc-all"></th>
+            <th style="width:120px">类型</th><th>路径</th><th style="width:100px">说明</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="status" id="dc-status"></div>
+    </div>
+
+    <!-- 右键菜单 -->
+    <div class="page" id="page-ctxmenu">
+      <h2>右键菜单管理</h2>
+      <div class="sub">管理鼠标右键菜单里由第三方软件添加的项目。禁用臃肿的右键项可让菜单更清爽、弹出更快。禁用会备份，可随时恢复。</div>
+      <div class="toolbar">
+        <button class="gray" id="cx-refresh">刷新</button>
+        <button class="red" id="cx-disable">⛔ 禁用选中</button>
+        <button id="cx-enable">✅ 启用选中</button>
+        <span class="dim" id="cx-count"></span>
+      </div>
+      <div class="panel">
+        <table id="cx-table">
+          <thead><tr>
+            <th style="width:70px">状态</th><th style="width:220px">菜单项</th>
+            <th style="width:150px">作用位置</th><th>命令</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="status" id="cx-status"></div>
+    </div>
+
+    <!-- 注册表清理 -->
+    <div class="page" id="page-regclean">
+      <h2>注册表清理</h2>
+      <div class="sub">扫描无效的注册表引用：已卸载软件的残留项、指向不存在文件的启动项与 App Paths。清理前会自动导出 .reg 备份，可随时双击备份文件还原。仅清理可安全判定为失效的项目，作风保守。</div>
+      <div class="toolbar">
+        <button id="rg-scan">🔍 扫描注册表</button>
+        <button class="red" id="rg-clean" disabled>🧹 备份并清理勾选</button>
+        <span class="total" id="rg-total"></span>
+      </div>
+      <div class="panel">
+        <table id="rg-table">
+          <thead><tr>
+            <th style="width:40px"><input type="checkbox" id="rg-all" checked></th>
+            <th style="width:150px">类型</th><th style="width:220px">项</th><th>失效原因 / 路径</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div class="status" id="rg-status"></div>
+    </div>
+
+    <!-- 一键优化 -->
+    <div class="page" id="page-optimize">
+      <h2>一键优化</h2>
+      <div class="sub">应用一组提升性能与响应速度的系统设置。每项均可单独勾选，且都可逆——需要时取消勾选再点应用即可还原。</div>
+      <div class="toolbar">
+        <button id="op-apply">⚡ 应用勾选优化</button>
+        <button class="gray" id="op-refresh">刷新当前状态</button>
+        <span class="total" id="op-hint"></span>
+      </div>
+      <div class="panel" id="op-list"></div>
+      <div class="status" id="op-status"></div>
+    </div>
+
     <!-- 工具箱 -->
     <div class="page" id="page-tools">
       <h2>工具箱</h2>
@@ -372,11 +553,15 @@
           <label class="switch"><input type="checkbox" id="set-dark" checked><i></i></label>
         </div>
         <div class="set-row">
+          <div><div class="s-name">每周自动清理垃圾</div><div class="s-desc">注册一个计划任务，每周日凌晨自动清理临时文件与回收站</div></div>
+          <label class="switch"><input type="checkbox" id="set-autoclean"><i></i></label>
+        </div>
+        <div class="set-row">
           <div><div class="s-name">搬家记录文件</div><div class="s-desc" id="set-moves-path"></div></div>
           <button class="gray mini-btn" id="set-open-data">打开数据目录</button>
         </div>
         <div class="set-row">
-          <div><div class="s-name">关于</div><div class="s-desc">DiskMate 磁盘管家 v2.1.0 · 应用搬家 / 垃圾清理 / 空间分析 / 大文件 / 重复文件 / 系统加速 / 隐私清理 / 软件更新 / 启动项 / 微信QQ专清 / 工具箱</div></div>
+          <div><div class="s-name">关于</div><div class="s-desc">DiskMate 磁盘管家 v2.4.0 · 21 大模块（含注册表清理·一键优化·定时清理）（首页体检·应用搬家·垃圾清理·空间分析·大文件·重复文件·系统加速·隐私清理·软件更新·驱动管理·硬件信息·磁盘健康·网络工具·深度清理·右键菜单·启动项·微信QQ专清·工具箱·设置）</div></div>
         </div>
       </div>
     </div>

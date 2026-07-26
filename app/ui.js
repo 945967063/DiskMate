@@ -13,6 +13,8 @@ const ui = {
   _modalResolve: null,
   confirm(title, bodyHtml, { okText = '确定', danger = false, showCancel = true } = {}) {
     return new Promise(resolve => {
+      // 若已有未决弹窗，先以 false 结算，避免其 await 永久挂起
+      if (ui._modalResolve) { ui._modalResolve(false); ui._modalResolve = null; }
       ui._modalResolve = resolve;
       $('#modal-title').textContent = title;
       $('#modal-body').innerHTML = bodyHtml;

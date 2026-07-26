@@ -175,6 +175,28 @@ Write-Output "$ok $fail"`);
   return { ok, fail };
 }
 
+/** 逐字节比较两个文件内容是否完全一致 */
+async function filesEqual(a, b) {
+  let fa, fb;
+  try {
+    const sa = await fsp.stat(a), sb = await fsp.stat(b);
+    if (sa.size !== sb.size) return false;
+    fa = await fsp.open(a, 'r'); fb = await fsp.open(b, 'r');
+    const CH = 1 << 20;
+    const ba = Buffer.alloc(CH), bb = Buffer.alloc(CH);
+    let pos = 0;
+    while (pos < sa.size) {
+      const len = Math.min(CH, sa.size - pos);
+      await fa.read(ba, 0, len, pos);
+      await fb.read(bb, 0, len, pos);
+      if (Buffer.compare(ba.subarray(0, len), bb.subarray(0, len)) !== 0) return false;
+      pos += len;
+    }
+    return true;
+  } catch { return false; }
+  finally { try { await fa?.close(); } catch { } try { await fb?.close(); } catch { } }
+}
+
 /** 配置读写 */
 function loadConfig() {
   try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; }
