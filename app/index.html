@@ -1,11 +1,17 @@
 <!DOCTYPE html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <title>DiskMate 磁盘管家</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="effects.css">
 </head>
 <body>
+
+<!-- ========== 自定义背景层 ========== -->
+<div id="app-bg"></div>
+<div id="app-bg2"></div>
+<div id="app-bg-mask"></div>
 
 <!-- ========== 标题栏 ========== -->
 <div id="titlebar">
@@ -25,60 +31,85 @@
     <div class="nav-item active" data-page="home">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 01-1 1h-5v-6h-6v6H4a1 1 0 01-1-1z"/></svg>
       <span>首页体检</span></div>
-    <div class="nav-item" data-page="mover">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
-      <span>应用搬家</span></div>
-    <div class="nav-item" data-page="junk">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 11v6M14 11v6"/></svg>
-      <span>垃圾清理</span></div>
-    <div class="nav-item" data-page="space">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="12" rx="1"/><rect x="13" y="3" width="8" height="7" rx="1"/><rect x="13" y="12" width="8" height="9" rx="1"/><rect x="3" y="17" width="8" height="4" rx="1"/></svg>
-      <span>空间分析</span></div>
-    <div class="nav-item" data-page="big">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M13 2v7h7M9 15h6M9 18h4"/></svg>
-      <span>大文件</span></div>
-    <div class="nav-item" data-page="dupe">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg>
-      <span>重复文件</span></div>
-    <div class="nav-item" data-page="boost">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
-      <span>系统加速</span></div>
-    <div class="nav-item" data-page="privacy">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10z"/></svg>
-      <span>隐私清理</span></div>
-    <div class="nav-item" data-page="update">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
-      <span>软件更新</span></div>
-    <div class="nav-item" data-page="driver">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
-      <span>驱动管理</span></div>
-    <div class="nav-item" data-page="hardware">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
-      <span>硬件信息</span></div>
-    <div class="nav-item" data-page="diskhealth">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
-      <span>磁盘健康</span></div>
-    <div class="nav-item" data-page="network">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.8a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></svg>
-      <span>网络工具</span></div>
-    <div class="nav-item" data-page="deepclean">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7 7M9 6l9 9-3 3-9-9M13 13l6 6"/></svg>
-      <span>深度清理</span></div>
-    <div class="nav-item" data-page="ctxmenu">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
-      <span>右键菜单</span></div>
-    <div class="nav-item" data-page="regclean">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
-      <span>注册表清理</span></div>
-    <div class="nav-item" data-page="optimize">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/><circle cx="12" cy="12" r="3"/></svg>
-      <span>一键优化</span></div>
-    <div class="nav-item" data-page="startup">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19c2-6 5-11 14-14-3 9-8 12-14 14zM5 19l-2 2M9 12l3 3"/></svg>
-      <span>启动项管理</span></div>
-    <div class="nav-item" data-page="tencent">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 01-8 8H4l2-3a8 8 0 1115-5z"/></svg>
-      <span>微信/QQ 专清</span></div>
+
+    <div class="nav-group" data-group="clean">
+      <div class="nav-group-head"><span>清理</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="nav-group-body">
+        <div class="nav-item" data-page="junk">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M6 6l1 15h10l1-15M10 11v6M14 11v6"/></svg>
+          <span>垃圾清理</span></div>
+        <div class="nav-item" data-page="deepclean">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4l7 7M9 6l9 9-3 3-9-9M13 13l6 6"/></svg>
+          <span>深度清理</span></div>
+        <div class="nav-item" data-page="privacy">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-3 8-10V5l-8-3-8 3v7c0 7 8 10 8 10z"/></svg>
+          <span>隐私清理</span></div>
+        <div class="nav-item" data-page="regclean">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 100 20 10 10 0 000-20z"/><path d="M12 6v6l4 2"/></svg>
+          <span>注册表清理</span></div>
+        <div class="nav-item" data-page="tencent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a8 8 0 01-8 8H4l2-3a8 8 0 1115-5z"/></svg>
+          <span>微信/QQ 专清</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="space">
+      <div class="nav-group-head"><span>空间</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="nav-group-body">
+        <div class="nav-item" data-page="space">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="8" height="12" rx="1"/><rect x="13" y="3" width="8" height="7" rx="1"/><rect x="13" y="12" width="8" height="9" rx="1"/><rect x="3" y="17" width="8" height="4" rx="1"/></svg>
+          <span>空间分析</span></div>
+        <div class="nav-item" data-page="big">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><path d="M13 2v7h7M9 15h6M9 18h4"/></svg>
+          <span>大文件</span></div>
+        <div class="nav-item" data-page="dupe">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v9a2 2 0 002 2h3"/></svg>
+          <span>重复文件</span></div>
+        <div class="nav-item" data-page="mover">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg>
+          <span>应用搬家</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="opt">
+      <div class="nav-group-head"><span>优化</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="nav-group-body">
+        <div class="nav-item" data-page="boost">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L4 14h6l-1 8 9-12h-6z"/></svg>
+          <span>系统加速</span></div>
+        <div class="nav-item" data-page="optimize">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/><circle cx="12" cy="12" r="3"/></svg>
+          <span>一键优化</span></div>
+        <div class="nav-item" data-page="startup">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19c2-6 5-11 14-14-3 9-8 12-14 14zM5 19l-2 2M9 12l3 3"/></svg>
+          <span>启动项管理</span></div>
+        <div class="nav-item" data-page="ctxmenu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg>
+          <span>右键菜单</span></div>
+      </div>
+    </div>
+
+    <div class="nav-group" data-group="sys">
+      <div class="nav-group-head"><span>硬件 / 系统</span><svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 9l6 6 6-6"/></svg></div>
+      <div class="nav-group-body">
+        <div class="nav-item" data-page="hardware">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+          <span>硬件信息</span></div>
+        <div class="nav-item" data-page="diskhealth">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+          <span>磁盘健康</span></div>
+        <div class="nav-item" data-page="driver">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 9h6v6H9z"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg>
+          <span>驱动管理</span></div>
+        <div class="nav-item" data-page="network">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 8.8a15 15 0 0120 0M5 12.5a10 10 0 0114 0M8.5 16a5 5 0 017 0"/><circle cx="12" cy="19.5" r="1" fill="currentColor"/></svg>
+          <span>网络工具</span></div>
+        <div class="nav-item" data-page="update">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-3-6.7"/><path d="M21 3v6h-6"/></svg>
+          <span>软件更新</span></div>
+      </div>
+    </div>
+
     <div id="nav-bottom">
       <div class="nav-sep"></div>
       <div class="nav-item" data-page="tools">
@@ -87,7 +118,7 @@
       <div class="nav-item" data-page="settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.7l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-1.7-.3 1.6 1.6 0 00-1 1.5V21a2 2 0 11-4 0v-.2a1.6 1.6 0 00-1-1.5 1.6 1.6 0 00-1.7.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1a1.6 1.6 0 00.3-1.7 1.6 1.6 0 00-1.5-1H3a2 2 0 110-4h.2a1.6 1.6 0 001.5-1 1.6 1.6 0 00-.3-1.7l-.1-.1a2 2 0 112.8-2.8l.1.1a1.6 1.6 0 001.7.3 1.6 1.6 0 001-1.5V3a2 2 0 114 0v.2a1.6 1.6 0 001 1.5 1.6 1.6 0 001.7-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.6 1.6 0 00-.3 1.7 1.6 1.6 0 001.5 1h.2a2 2 0 110 4h-.2a1.6 1.6 0 00-1.5 1z"/></svg>
         <span>设置</span></div>
-      <div id="ver-tag">v2.4.0</div>
+      <div id="ver-tag">v3.5.0</div>
     </div>
   </div>
 
@@ -96,14 +127,15 @@
 
     <!-- 首页体检 -->
     <div class="page active" id="page-home">
-      <h2>首页体检</h2>
+      <h2>仪表盘</h2>
       <div class="sub">一键了解电脑健康状况，发现可优化项目后可直达对应模块处理。</div>
+      <div class="stat-grid" id="hm-stats"></div>
       <div id="home-grid">
         <div class="card" id="score-card">
           <div id="score-ring">
             <svg width="168" height="168">
               <defs><linearGradient id="scoreGrad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#6366F1"/><stop offset="100%" stop-color="#8B5CF6"/>
+                <stop offset="0%" stop-color="#4F80F7"/><stop offset="100%" stop-color="#22C0D0"/>
               </linearGradient></defs>
               <circle class="ring-bg" cx="84" cy="84" r="74" fill="none" stroke-width="13"/>
               <circle class="ring-fg" id="ring-fg" cx="84" cy="84" r="74" fill="none" stroke-width="13"
@@ -112,6 +144,11 @@
             <div id="score-num"><b id="score-val">--</b><span id="score-label">尚未体检</span></div>
           </div>
           <button id="hm-check">⚡ 一键体检</button>
+          <div class="quick-row">
+            <div class="quick-btn" data-go="junk"><span class="q-ico">🧹</span><span class="q-name">垃圾清理</span></div>
+            <div class="quick-btn" data-go="space"><span class="q-ico">📊</span><span class="q-name">空间分析</span></div>
+            <div class="quick-btn" data-go="boost"><span class="q-ico">⚡</span><span class="q-name">加速</span></div>
+          </div>
         </div>
         <div id="home-right">
           <div class="card">
@@ -560,8 +597,59 @@
           <div><div class="s-name">搬家记录文件</div><div class="s-desc" id="set-moves-path"></div></div>
           <button class="gray mini-btn" id="set-open-data">打开数据目录</button>
         </div>
+      </div>
+
+      <div class="s-section">自定义背景</div>
+      <div class="sub" style="margin-bottom:12px">设置图片或视频作为界面背景，卡片会以玻璃质感浮于其上。地址支持 http(s) 链接或本地文件。</div>
+      <div class="panel" style="flex:none">
         <div class="set-row">
-          <div><div class="s-name">关于</div><div class="s-desc">DiskMate 磁盘管家 v2.4.0 · 21 大模块（含注册表清理·一键优化·定时清理）（首页体检·应用搬家·垃圾清理·空间分析·大文件·重复文件·系统加速·隐私清理·软件更新·驱动管理·硬件信息·磁盘健康·网络工具·深度清理·右键菜单·启动项·微信QQ专清·工具箱·设置）</div></div>
+          <div><div class="s-name">启用自定义背景</div><div class="s-desc">开启后使用下方图片/视频作为界面背景</div></div>
+          <label class="switch"><input type="checkbox" id="bg-enable"><i></i></label>
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">背景类型</div><div class="s-desc">图片 或 视频（视频建议用本地文件）</div></div>
+          <select id="bg-type" style="width:120px"><option value="image">图片</option><option value="video">视频</option></select>
+        </div>
+        <div class="set-row">
+          <div style="flex:1;min-width:0"><div class="s-name">浅色模式背景</div><div class="s-desc">http(s) 链接或本地文件路径</div>
+            <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="bg-light" style="flex:1" placeholder="https://… 或 C:\\图片\\bg.jpg"><button class="gray mini-btn" id="bg-light-pick">选文件</button></div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div style="flex:1;min-width:0"><div class="s-name">深色模式背景</div><div class="s-desc">http(s) 链接或本地文件路径</div>
+            <div style="display:flex;gap:8px;margin-top:8px"><input type="text" id="bg-dark" style="flex:1" placeholder="https://… 或 C:\\图片\\bg.jpg"><button class="gray mini-btn" id="bg-dark-pick">选文件</button></div>
+          </div>
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">背景模糊半径</div><div class="s-desc">高斯模糊像素，0 表示不模糊</div></div>
+          <input type="text" id="bg-blur" style="width:90px" value="0">
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">背景遮罩强度</div><div class="s-desc">-100 到 100；0 关闭，正数加深、负数提亮</div></div>
+          <input type="text" id="bg-overlay" style="width:90px" value="0">
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">应用背景设置</div><div class="s-desc">修改后点此生效（也会自动保存）</div></div>
+          <button id="bg-apply">应用</button>
+        </div>
+      </div>
+
+      <div class="s-section">关于与更新</div>
+      <div class="panel" style="flex:none">
+        <div class="set-row">
+          <div><div class="s-name">版本更新<span class="upd-badge" id="upd-badge" style="display:none">有新版本</span></div><div class="s-desc" id="upd-status">当前版本 v3.5.0</div></div>
+          <div style="display:flex;gap:8px">
+            <button id="upd-check">检查更新</button>
+            <button class="gray" id="upd-open" style="display:none">前往下载</button>
+          </div>
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">开发者工具</div><div class="s-desc">按 F12 或点此打开，可实时查看/修改界面样式（调试用）</div></div>
+          <button class="gray mini-btn" id="open-devtools">打开 F12</button>
+        </div>
+        <div class="set-row">
+          <div><div class="s-name">DiskMate 磁盘管家</div><div class="s-desc">21 大功能模块 · 驾驶舱玻璃拟态界面 · 自定义背景 · 开源于 GitHub</div></div>
+          <button class="gray mini-btn" id="open-repo">项目主页</button>
         </div>
       </div>
     </div>

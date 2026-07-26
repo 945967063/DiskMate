@@ -34,10 +34,34 @@ async function hmLoadOverview() {
   const opts = hm.drives.map(d => `<option>${esc(d.DeviceID)}\\</option>`).join('') || '<option>C:\\</option>';
   $('#sp-drive').innerHTML = opts;
   $('#bf-drive').innerHTML = opts;
+
+  hmStats();
+}
+
+function hmStats() {
+  const sys = hm.drives.find(d => (d.DeviceID + '\\').toLowerCase() === SYS_DRIVE.toLowerCase()) || hm.drives[0];
+  const memUsedPct = (100 * (1 - os.freemem() / os.totalmem())).toFixed(0);
+  const cards = [
+    { ico: '💽', label: '磁盘分区', num: hm.drives.length, grad: true },
+    { ico: '🖴', label: `系统盘可用（${sys ? esc(sys.DeviceID) : 'C:'}）`, num: sys ? fmt(sys.FreeSpace) : '—' },
+    { ico: '⚙️', label: '内存占用', num: memUsedPct + '%', grad: true },
+    { ico: '🧠', label: '总内存', num: fmt(os.totalmem()) },
+    { ico: '🩺', label: '健康评分', num: hm.checked ? ($('#score-val').textContent || '—') : '未体检', id: 'stat-score' },
+  ];
+  $('#hm-stats').innerHTML = cards.map(c => `
+    <div class="stat-card">
+      <div class="stat-top">
+        <div class="stat-ico">${c.ico}</div>
+        <div class="stat-label">${c.label}</div>
+      </div>
+      <div class="stat-num ${c.grad ? 'grad' : ''}">${c.num}</div>
+    </div>`).join('');
+  ui.stagger($('#page-home'));
 }
 
 async function hmCheck() {
   $('#hm-check').disabled = true;
+  $('#score-card').classList.add('checking');
   $('#score-label').textContent = '体检中…';
   $('#score-val').textContent = '…';
   const issues = [];
@@ -84,7 +108,8 @@ Write-Output $n`);
 
   score = Math.max(40, Math.round(score));
   hm.checked = true;
-  $('#score-val').textContent = score;
+  $('#score-card').classList.remove('checking');
+  ui.countUp($('#score-val'), score, { dur: 1100 });
   $('#score-label').textContent = score >= 90 ? '状态极佳' : score >= 75 ? '状态良好' : score >= 60 ? '建议优化' : '亟需清理';
   $('#ring-fg').style.strokeDashoffset = String(465 * (1 - score / 100));
   $('#hm-issues').innerHTML = issues.length ? issues.map((i, k) => `
@@ -96,6 +121,7 @@ Write-Output $n`);
   $('#hm-issues').querySelectorAll('[data-go]').forEach(b =>
     b.addEventListener('click', () => ui.go(b.dataset.go)));
   $('#hm-check').disabled = false;
+  setTimeout(hmStats, 60);
 }
 
 $('#hm-check').addEventListener('click', hmCheck);
@@ -791,9 +817,11 @@ async function bfScan() {
       }
     });
     bf.items.sort((a, b) => b.size - a.size);
-    if (bf.items.length > 500) bf.items = bf.items.slice(0, 500);
+    const truncated = bf.items.length > 500;
+    if (truncated) bf.items = bf.items.slice(0, 500);
     bfRender();
-    $('#bf-status').textContent = `扫描完成：找到 ${bf.items.length} 个大于 ${fmt(min)} 的文件（共扫描 ${state.files.toLocaleString()} 个文件）`;
+    $('#bf-status').textContent = `扫描完成：找到 ${bf.items.length} 个大于 ${fmt(min)} 的文件（共扫描 ${state.files.toLocaleString()} 个文件）` +
+      (truncated ? '，仅显示最大的 500 个' : '');
   } catch (e) {
     if (e.message === 'cancelled') { bf.items.sort((a, b) => b.size - a.size); bfRender(); $('#bf-status').textContent = '扫描已停止（已显示部分结果）。'; }
     else $('#bf-status').textContent = '扫描出错：' + e.message;
@@ -813,7 +841,7 @@ function bfRender() {
       <td class="dim" title="${esc(path.dirname(f.p))}">${esc(path.dirname(f.p))}</td>
       <td class="dim">${f.mtime.toLocaleDateString('zh-CN')}</td>
       <td><button class="mini-btn" data-open="${i}">位置</button></td>
-    </tr>`).join('');
+    </tr>`).join('') || '<tr><td colspan="6"><div class="empty-state"><span class="es-ico">📂</span>未找到符合条件的大文件</div></td></tr>';
   const tb = $('#bf-table tbody');
   tb.querySelectorAll('input').forEach(cb =>
     cb.addEventListener('change', () => bf.items[cb.dataset.idx].checked = cb.checked));
@@ -2342,3 +2370,171 @@ window.addEventListener('page-show', e => {
   if (e.detail === 'regclean' && !rgLoaded) { rgLoaded = true; rgScan(); }
   if (e.detail === 'optimize' && !opLoaded) { opLoaded = true; opRefresh(); }
 });
+
+/* ============================================================
+ * v2.5 —— 页面切换时卡片错位入场
+ * ============================================================ */
+window.addEventListener('page-show', e => {
+  const cardPages = ['home', 'hardware', 'tools', 'diskhealth', 'optimize'];
+  if (cardPages.includes(e.detail)) {
+    const host = document.getElementById('page-' + e.detail);
+    if (host) ui.stagger(host);
+  }
+});
+// 首屏首页卡片入场
+window.addEventListener('DOMContentLoaded', () => ui.stagger(document.getElementById('page-home')));
+setTimeout(() => ui.stagger(document.getElementById('page-home')), 60);
+
+/* ============================================================
+ * v3.4 —— 自定义背景（图片 / 视频 · 亮暗分设 · 模糊 · 遮罩）
+ * ============================================================ */
+function bgToUrl(p) {
+  if (!p) return '';
+  if (/^(https?:|file:|data:)/i.test(p)) return p;
+  let u = p.replace(/\\/g, '/');
+  if (!/^\//.test(u)) u = '/' + u;
+  return 'file://' + encodeURI(u).replace(/#/g, '%23').replace(/\?/g, '%3F');
+}
+
+function applyBg() {
+  const b = (loadConfig().bg) || {};
+  const bg = $('#app-bg'), mask = $('#app-bg-mask');
+  if (!bg || !mask) return;
+  bg.innerHTML = ''; bg.style.backgroundImage = '';
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const src = dark ? (b.dark || b.light) : (b.light || b.dark);
+  if (!b.enabled || !src) { document.documentElement.classList.remove('has-bg'); return; }
+  document.documentElement.classList.add('has-bg');
+  const url = bgToUrl(src.trim());
+  if (b.type === 'video') {
+    const v = document.createElement('video');
+    v.src = url; v.autoplay = true; v.loop = true; v.muted = true;
+    v.setAttribute('playsinline', ''); v.setAttribute('disablepictureinpicture', '');
+    bg.appendChild(v);
+  } else {
+    bg.style.backgroundImage = `url("${url}")`;
+  }
+  const blur = Math.max(0, parseInt(b.blur) || 0);
+  const filt = blur > 0 ? `blur(${blur}px)` : '';
+  const tf = blur > 0 ? 'scale(1.08)' : '';
+  bg.style.filter = filt; bg.style.transform = tf;
+  const bg2 = $('#app-bg2'); if (bg2) { bg2.style.filter = filt; bg2.style.transform = tf; bg2.style.opacity = '0'; }
+  let ov = parseInt(b.overlay) || 0; ov = Math.max(-100, Math.min(100, ov));
+  mask.style.background = ov > 0 ? `rgba(0,0,0,${ov / 100})`
+    : ov < 0 ? `rgba(255,255,255,${-ov / 100})` : 'transparent';
+
+  // 图片背景每 30 秒交叉淡入切换（配合随机图 API 可自动换壁纸）
+  clearInterval(window._bgTimer);
+  if (b.enabled && src && b.type === 'image') {
+    window._bgTimer = setInterval(bgRotate, 30000);
+  }
+}
+window.applyBg = applyBg;
+
+function bgRotate() {
+  if (!document.documentElement.classList.contains('has-bg')) return;
+  const b = (loadConfig().bg) || {};
+  if (b.type !== 'image') return;
+  const dark = document.documentElement.dataset.theme === 'dark';
+  const src = dark ? (b.dark || b.light) : (b.light || b.dark);
+  if (!src) return;
+  const u = bgToUrl(src.trim());
+  const nu = u + (u.includes('?') ? '&' : '?') + '_dm=' + Date.now();
+  const bg = $('#app-bg'), bg2 = $('#app-bg2');
+  const img = new Image();
+  img.onload = () => {
+    bg2.style.backgroundImage = `url("${nu}")`;
+    bg2.style.filter = bg.style.filter; bg2.style.transform = bg.style.transform;
+    bg2.style.opacity = '1';
+    setTimeout(() => { bg.style.backgroundImage = `url("${nu}")`; bg2.style.opacity = '0'; }, 950);
+  };
+  img.onerror = () => {};
+  img.src = nu;
+}
+
+function bgLoadUI() {
+  const b = (loadConfig().bg) || {};
+  $('#bg-enable').checked = !!b.enabled;
+  $('#bg-type').value = b.type || 'image';
+  $('#bg-light').value = b.light || '';
+  $('#bg-dark').value = b.dark || '';
+  $('#bg-blur').value = b.blur ?? 0;
+  $('#bg-overlay').value = b.overlay ?? 0;
+}
+function bgSave() {
+  const cfg = loadConfig();
+  cfg.bg = {
+    enabled: $('#bg-enable').checked,
+    type: $('#bg-type').value,
+    light: $('#bg-light').value.trim(),
+    dark: $('#bg-dark').value.trim(),
+    blur: parseInt($('#bg-blur').value) || 0,
+    overlay: parseInt($('#bg-overlay').value) || 0,
+  };
+  saveConfig(cfg);
+  applyBg();
+}
+$('#bg-enable').addEventListener('change', bgSave);
+$('#bg-type').addEventListener('change', bgSave);
+$('#bg-blur').addEventListener('change', bgSave);
+$('#bg-overlay').addEventListener('change', bgSave);
+$('#bg-apply').addEventListener('click', () => { bgSave(); ui.toast('背景设置已应用', 'success'); });
+$('#bg-light-pick').addEventListener('click', async () => {
+  const f = await ipcRenderer.invoke('pick-files', '选择浅色模式背景文件');
+  if (f && f[0]) { $('#bg-light').value = f[0]; bgSave(); }
+});
+$('#bg-dark-pick').addEventListener('click', async () => {
+  const f = await ipcRenderer.invoke('pick-files', '选择深色模式背景文件');
+  if (f && f[0]) { $('#bg-dark').value = f[0]; bgSave(); }
+});
+window.addEventListener('theme-change', applyBg);
+bgLoadUI();
+applyBg();
+
+/* ============================================================
+ * v3.5 —— 版本更新检查（GitHub Releases）
+ * ============================================================ */
+const REPO_OWNER = '945967063', REPO_NAME = 'DiskMate';
+let APP_VER = '3.5.0';
+try { APP_VER = require('./package.json').version; } catch { }
+
+function cmpVer(a, b) {
+  const pa = String(a).split('.').map(n => parseInt(n) || 0);
+  const pb = String(b).split('.').map(n => parseInt(n) || 0);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); }
+  return 0;
+}
+
+async function checkUpdate(manual) {
+  if (manual) $('#upd-status').textContent = '正在检查更新…';
+  try {
+    const r = await fetch(`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest`,
+      { headers: { 'Accept': 'application/vnd.github+json' } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const latest = String(j.tag_name || '').replace(/^v/i, '');
+    if (!latest) throw new Error('no tag');
+    if (cmpVer(latest, APP_VER) > 0) {
+      $('#upd-status').textContent = `发现新版本 v${latest}（当前 v${APP_VER}）`;
+      $('#upd-badge').style.display = '';
+      const btn = $('#upd-open'); btn.style.display = '';
+      const url = (j.assets && j.assets[0] && j.assets[0].browser_download_url) || j.html_url;
+      btn.onclick = () => ipcRenderer.invoke('open-external', url);
+      if (manual) ui.toast(`🎉 发现新版本 v${latest}，点「前往下载」更新`, 'success', 5000);
+      else ui.toast(`发现新版本 v${latest}，可在设置中更新`, 'info', 5000);
+    } else {
+      $('#upd-status').textContent = `已是最新版本 v${APP_VER}`;
+      $('#upd-badge').style.display = 'none';
+      if (manual) ui.toast('已是最新版本', 'success');
+    }
+  } catch (e) {
+    $('#upd-status').textContent = `当前版本 v${APP_VER}（检查失败：网络或尚未发布 Release）`;
+    if (manual) ui.toast('检查更新失败：网络异常或仓库尚未发布 Release', 'warn', 5000);
+  }
+}
+$('#upd-status').textContent = `当前版本 v${APP_VER}`;
+$('#upd-check').addEventListener('click', () => checkUpdate(true));
+$('#open-devtools').addEventListener('click', () => ipcRenderer.invoke('toggle-devtools'));
+$('#open-repo').addEventListener('click', () => ipcRenderer.invoke('open-external', `https://github.com/${REPO_OWNER}/${REPO_NAME}`));
+// 启动 5 秒后静默检查一次
+setTimeout(() => checkUpdate(false), 5000);

@@ -2,26 +2,31 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --accent: #6366F1;
-  --accent2: #8B5CF6;
-  --grad: linear-gradient(135deg, #6366F1, #8B5CF6);
+  --accent: #3B82F6;
+  --accent2: #06B6D4;
+  --grad: linear-gradient(135deg, #4F80F7 0%, #22C0D0 100%);
+  --grad-text: linear-gradient(120deg, #3B6EF0 0%, #22B8C4 100%);
   --danger: #EF4444;
   --success: #10B981;
   --warn: #F59E0B;
-  --radius: 12px;
-  --side-w: 208px;
+  --radius: 18px;
+  --side-w: 158px;
 }
 :root[data-theme="light"] {
-  --bg: #F1F5F9; --card: #FFFFFF; --card2: #F8FAFC;
-  --border: #E2E8F0; --text: #0F172A; --text2: #64748B;
-  --hover: #EEF2FF; --sel: #E0E7FF; --shadow: 0 1px 3px rgba(15,23,42,.07);
-  --bar-track: #E2E8F0;
+  --bg: #EEF2FB; --card: #FFFFFF; --card2: #F7F9FD;
+  --border: #E8EDF6; --text: #1E293B; --text2: #8794A8;
+  --hover: #F1F5FF; --sel: #E7EFFF; --shadow: 0 10px 30px rgba(51,74,128,.08);
+  --shadow-sm: 0 4px 14px rgba(51,74,128,.06);
+  --bar-track: #EBF0F8;
+  --side-bg: rgba(255,255,255,.86);
 }
 :root[data-theme="dark"] {
-  --bg: #0F172A; --card: #1E293B; --card2: #16213A;
-  --border: #334155; --text: #E2E8F0; --text2: #94A3B8;
-  --hover: #27324A; --sel: #31406B; --shadow: 0 1px 3px rgba(0,0,0,.35);
-  --bar-track: #334155;
+  --bg: #0E1424; --card: #1A2338; --card2: #151D30;
+  --border: #2A3550; --text: #E5EAF3; --text2: #8A97AE;
+  --hover: #222D45; --sel: #2C3A5C; --shadow: 0 10px 30px rgba(0,0,0,.4);
+  --shadow-sm: 0 4px 14px rgba(0,0,0,.3);
+  --bar-track: #2A3550;
+  --side-bg: rgba(26,35,56,.82);
 }
 
 html, body { height: 100%; }
@@ -307,3 +312,101 @@ tbody tr.selected { background: var(--sel); }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text2); }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ============================================================
+ *  v3.0 —— Cockpit 皮肤（悬浮胶囊侧边栏 / 浅色渐变 / 圆角卡片）
+ * ============================================================ */
+body {
+  background:
+    radial-gradient(1200px 700px at 85% -10%, rgba(34,192,208,.10), transparent 55%),
+    linear-gradient(135deg, #E9F0FC 0%, #F1EEFB 48%, #E8F6F3 100%);
+}
+:root[data-theme="dark"] body {
+  background:
+    radial-gradient(1200px 700px at 85% -10%, rgba(34,192,208,.10), transparent 55%),
+    linear-gradient(135deg, #0E1424 0%, #141A2E 55%, #0F1A22 100%);
+}
+
+/* 标题栏：透明轻量 */
+#titlebar { background: transparent; color: var(--text2); }
+#titlebar .t-title { color: var(--text); font-weight: 700; }
+#titlebar .t-badge { background: rgba(59,130,246,.14); color: var(--accent); }
+#titlebar .t-badge.noadmin { background: rgba(245,158,11,.16); color: #D97706; }
+#titlebar .t-btn { color: var(--text2); }
+#titlebar .t-btn:hover { background: rgba(100,116,139,.14); color: var(--text); }
+#titlebar .t-btn.close:hover { background: #EF4444; color: #fff; }
+
+/* 悬浮胶囊侧边栏 */
+#main { padding-bottom: 12px; }
+#sidebar {
+  width: 152px; margin: 2px 2px 4px 12px; padding: 12px 8px;
+  background: var(--side-bg); backdrop-filter: blur(16px);
+  border: 1px solid var(--border); border-radius: 24px;
+  box-shadow: var(--shadow); align-items: stretch;
+}
+.nav-item {
+  border-radius: 13px; color: var(--text2); font-size: 12.5px;
+  padding: 9px 12px; gap: 10px; margin-bottom: 3px; font-weight: 500;
+}
+.nav-item svg { width: 17px; height: 17px; }
+.nav-item:hover { background: var(--hover); color: var(--text); }
+.nav-item.active { background: var(--grad); color: #fff; box-shadow: 0 6px 16px rgba(59,130,246,.3); }
+.nav-sep { width: 70%; margin: 8px auto; background: var(--border); }
+#ver-tag { color: var(--text2); font-weight: 600; }
+
+/* 内容区留白 */
+.page { padding: 14px 26px 20px; }
+.page h2 {
+  font-size: 23px; font-weight: 800; letter-spacing: .3px;
+  background: var(--grad-text); -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; margin-bottom: 4px;
+}
+.page .sub { font-size: 12.5px; }
+
+/* 卡片 / 面板 更柔和大圆角 */
+.card, .panel { border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.card { padding: 20px; }
+.hw-card, .tool-card, .jk-row { border-radius: 14px; }
+
+/* 按钮：渐变主色 + 柔和投影 */
+button { border-radius: 11px; box-shadow: 0 5px 14px rgba(59,130,246,.24); font-weight: 600; }
+button.gray { box-shadow: none; background: var(--card); }
+button.gray:hover { background: var(--hover); border-color: var(--accent); }
+button.red { box-shadow: 0 5px 14px rgba(239,68,68,.26); }
+input[type=text], select { border-radius: 10px; }
+
+/* 顶部统计卡格（仪表盘） */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(158px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.stat-card {
+  display: flex; align-items: center; gap: 12px; background: var(--card);
+  border: 1px solid var(--border); border-radius: 16px; padding: 14px 16px;
+  box-shadow: var(--shadow-sm); transition: transform .16s, box-shadow .2s;
+}
+.stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 26px rgba(59,130,246,.14); }
+.stat-ico {
+  width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 20px;
+  background: linear-gradient(135deg, rgba(79,128,247,.16), rgba(34,192,208,.16));
+}
+.stat-body { min-width: 0; }
+.stat-label { font-size: 11.5px; color: var(--text2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stat-num { font-size: 21px; font-weight: 800; line-height: 1.15; color: var(--text); }
+.stat-num.grad { background: var(--grad-text); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+/* 细下划线式进度条（驾驶舱风格） */
+.bar { height: 6px; border-radius: 3px; }
+
+/* 分段控件 / 开关 沿用变量，自动适配浅色 */
+
+/* 侧边栏分组折叠（手风琴） */
+.nav-group-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 12px 5px; margin-top: 4px; font-size: 10.5px; font-weight: 700;
+  color: var(--text2); cursor: pointer; letter-spacing: .6px; opacity: .8;
+  user-select: none;
+}
+.nav-group-head:hover { color: var(--accent); opacity: 1; }
+.nav-group-head .chev { width: 12px; height: 12px; transition: transform .22s; opacity: .8; }
+.nav-group.collapsed .chev { transform: rotate(-90deg); }
+.nav-group-body { overflow: hidden; max-height: 320px; transition: max-height .25s ease, opacity .2s; }
+.nav-group.collapsed .nav-group-body { max-height: 0; opacity: 0; }
