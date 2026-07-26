@@ -69,6 +69,12 @@ if (process.platform === 'win32' && !isElevated() && !process.env.DISKMATE_NO_EL
     ipcMain.handle('show-in-folder', (e, p) => shell.showItemInFolder(p));
     ipcMain.handle('open-external', (e, u) => shell.openExternal(u));
     ipcMain.handle('toggle-devtools', () => win && win.webContents.toggleDevTools());
+    // 运行安装包并退出当前程序（用于应用内更新）
+    ipcMain.handle('run-and-quit', (e, filePath) => {
+      try { spawn(filePath, [], { detached: true, stdio: 'ignore' }).unref(); } catch (err) { return String(err); }
+      setTimeout(() => app.quit(), 600);
+      return 'ok';
+    });
     ipcMain.on('win-min', () => win && win.minimize());
     ipcMain.on('win-max', () => win && (win.isMaximized() ? win.unmaximize() : win.maximize()));
     ipcMain.on('win-close', () => win && win.close());

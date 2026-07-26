@@ -2518,10 +2518,16 @@ async function checkUpdate(manual) {
       $('#upd-status').textContent = `发现新版本 v${latest}（当前 v${APP_VER}）`;
       $('#upd-badge').style.display = '';
       const btn = $('#upd-open'); btn.style.display = '';
-      const url = (j.assets && j.assets[0] && j.assets[0].browser_download_url) || j.html_url;
-      btn.onclick = () => ipcRenderer.invoke('open-external', url);
-      if (manual) ui.toast(`🎉 发现新版本 v${latest}，点「前往下载」更新`, 'success', 5000);
-      else ui.toast(`发现新版本 v${latest}，可在设置中更新`, 'info', 5000);
+      const asset = (j.assets || []).find(a => /\.exe$/i.test(a.name || ''));
+      if (asset) {
+        btn.textContent = `⬇ 下载并安装 v${latest}`;
+        btn.onclick = () => downloadAndUpdate(asset.browser_download_url, latest, j.html_url);
+      } else {
+        btn.textContent = '前往下载';
+        btn.onclick = () => ipcRenderer.invoke('open-external', j.html_url);
+      }
+      if (manual) ui.toast(`🎉 发现新版本 v${latest}，点「下载并安装」一键更新`, 'success', 5000);
+      else ui.toast(`发现新版本 v${latest}，可在设置中一键更新`, 'info', 5000);
     } else {
       $('#upd-status').textContent = `已是最新版本 v${APP_VER}`;
       $('#upd-badge').style.display = 'none';
@@ -2532,6 +2538,40 @@ async function checkUpdate(manual) {
     if (manual) ui.toast('检查更新失败：网络异常或仓库尚未发布 Release', 'warn', 5000);
   }
 }
+// 应用内下载新版安装包并运行安装（带进度）
+async function downloadAndUpdate(url, ver, pageUrl) {
+  const dest = path.join(os.tmpdir(), `DiskMate-Setup-${ver}.exe`);
+  ui.busy(true, '正在下载更新… 0%');
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const total = parseInt(res.headers.get('content-length')) || 0;
+    const reader = res.body.getReader();
+    const chunks = []; let received = 0, lastPct = -1;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); received += value.length;
+      if (total) {
+        const pct = Math.round(received / total * 100);
+        if (pct !== lastPct) { lastPct = pct; ui.busy(true, `正在下载更新… ${pct}%（${fmt(received)}/${fmt(total)}）`); }
+      } else ui.busy(true, `正在下载更新… ${fmt(received)}`);
+    }
+    fs.writeFileSync(dest, Buffer.concat(chunks.map(c => Buffer.from(c))));
+    ui.busy(false);
+    if (await ui.confirm('下载完成', `新版本 v${ver} 已下载完成。<br>现在关闭程序并开始安装更新？<br><span class="dim">安装向导会引导你完成更新。</span>`, { okText: '立即安装' })) {
+      const r = await ipcRenderer.invoke('run-and-quit', dest);
+      if (r !== 'ok') ui.toast('启动安装程序失败，请手动运行：' + esc(dest), 'error', 6000);
+    } else {
+      ui.toast('安装包已下载到：' + esc(dest), 'info', 5000);
+    }
+  } catch (e) {
+    ui.busy(false);
+    if (await ui.confirm('下载失败', `应用内下载失败（${esc(e.message)}）。<br>是否改用浏览器手动下载？`, { okText: '浏览器下载' }))
+      ipcRenderer.invoke('open-external', pageUrl);
+  }
+}
+
 $('#upd-status').textContent = `当前版本 v${APP_VER}`;
 $('#upd-check').addEventListener('click', () => checkUpdate(true));
 $('#open-devtools').addEventListener('click', () => ipcRenderer.invoke('toggle-devtools'));
